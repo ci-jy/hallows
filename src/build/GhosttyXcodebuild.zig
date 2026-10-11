@@ -1,11 +1,9 @@
 const Ghostty = @This();
 
 const std = @import("std");
-const builtin = @import("builtin");
 const RunStep = std.Build.Step.Run;
 const Config = @import("Config.zig");
 const Docs = @import("GhosttyDocs.zig");
-const I18n = @import("GhosttyI18n.zig");
 const Resources = @import("GhosttyResources.zig");
 const XCFramework = @import("GhosttyXCFramework.zig");
 
@@ -17,7 +15,6 @@ xctest: *std.Build.Step.Run,
 pub const Deps = struct {
     xcframework: *const XCFramework,
     docs: *const Docs,
-    i18n: ?*const I18n,
     resources: *const Resources,
 };
 
@@ -32,22 +29,6 @@ pub fn init(
         .ReleaseSmall,
         .ReleaseFast,
         => "ReleaseLocal",
-    };
-
-    const xc_arch: ?[]const u8 = switch (deps.xcframework.target) {
-        // Universal builds every architecture the Xcode project lists.
-        .universal => null,
-
-        // Apple Silicon only.
-        .arm64 => "arm64",
-
-        // Native we need to override the architecture in the Xcode
-        // project with the -arch flag.
-        .native => switch (builtin.cpu.arch) {
-            .aarch64 => "arm64",
-            .x86_64 => "x86_64",
-            else => @panic("unsupported macOS arch"),
-        },
     };
 
     const env = b.graph.environ_map;
@@ -71,11 +52,9 @@ pub fn init(
             "Ghostty",
             "-configuration",
             xc_config,
+            "-arch",
+            "arm64",
         });
-
-        // If we have a specific architecture, we need to pass it
-        // to xcodebuild.
-        if (xc_arch) |arch| step.addArgs(&.{ "-arch", arch });
 
         // We need the xcframework
         deps.xcframework.addStepDependencies(&step.step);
@@ -83,7 +62,6 @@ pub fn init(
         // We also need all these resources because the xcode project
         // references them via symlinks.
         deps.resources.addStepDependencies(&step.step);
-        if (deps.i18n) |v| v.addStepDependencies(&step.step);
         deps.docs.installDummy(&step.step);
 
         // Expect success
@@ -108,8 +86,9 @@ pub fn init(
             "Ghostty",
             "-skip-testing",
             "GhosttyUITests",
+            "-arch",
+            "arm64",
         });
-        if (xc_arch) |arch| step.addArgs(&.{ "-arch", arch });
 
         // We need the xcframework
         deps.xcframework.addStepDependencies(&step.step);
@@ -117,7 +96,6 @@ pub fn init(
         // We also need all these resources because the xcode project
         // references them via symlinks.
         deps.resources.addStepDependencies(&step.step);
-        if (deps.i18n) |v| v.addStepDependencies(&step.step);
         deps.docs.installDummy(&step.step);
 
         // Expect success
@@ -145,7 +123,7 @@ pub fn init(
         open.has_side_effects = true;
         open.cwd = b.path("");
         open.addArgs(&.{b.fmt(
-            "{s}/Contents/MacOS/ghostty",
+            "{s}/Contents/MacOS/hallows",
             .{app_path},
         )});
 

@@ -6,7 +6,6 @@
 const Device = @This();
 
 const std = @import("std");
-const builtin = @import("builtin");
 const objc = @import("objc");
 
 const mtl = @import("api.zig");
@@ -35,11 +34,8 @@ pub fn init(self: *Device, alloc: std.mem.Allocator) !void {
     errdefer device.release();
 
     // Grab metadata about the device.
-    const default_storage_mode: mtl.MTLResourceOptions.StorageMode = switch (comptime builtin.os.tag) {
-        // manage mode is not supported by iOS
-        .ios => .shared,
-        else => if (device.getProperty(bool, "hasUnifiedMemory")) .shared else .managed,
-    };
+    const default_storage_mode: mtl.MTLResourceOptions.StorageMode =
+        if (device.getProperty(bool, "hasUnifiedMemory")) .shared else .managed;
     const max_texture_size = queryMaxTextureSize(device);
     log.debug(
         "device properties default_storage_mode={} max_texture_size={}",
@@ -99,29 +95,20 @@ pub fn warmup() void {
 fn chooseDevice() error{NoMetalDevice}!objc.Object {
     var chosen_device: ?objc.Object = null;
 
-    switch (comptime builtin.os.tag) {
-        .macos => {
-            const devices = objc.Object.fromId(mtl.MTLCopyAllDevices());
-            defer devices.release();
+    const devices = objc.Object.fromId(mtl.MTLCopyAllDevices());
+    defer devices.release();
 
-            var iter = devices.iterate();
-            while (iter.next()) |device| {
-                // We want a GPU that’s connected to a display.
-                if (device.getProperty(bool, "isHeadless")) continue;
-                chosen_device = device;
+    var iter = devices.iterate();
+    while (iter.next()) |device| {
+        // We want a GPU that’s connected to a display.
+        if (device.getProperty(bool, "isHeadless")) continue;
+        chosen_device = device;
 
-                // If the user has an eGPU plugged in, they probably want
-                // to use it. Otherwise, integrated GPUs are better for
-                // battery life and thermals.
-                if (device.getProperty(bool, "isRemovable") or
-                    device.getProperty(bool, "isLowPower")) break;
-            }
-        },
-
-        .ios => {
-            chosen_device = objc.Object.fromId(mtl.MTLCreateSystemDefaultDevice());
-        },
-        else => @compileError("unsupported target for Metal"),
+        // If the user has an eGPU plugged in, they probably want
+        // to use it. Otherwise, integrated GPUs are better for
+        // battery life and thermals.
+        if (device.getProperty(bool, "isRemovable") or
+            device.getProperty(bool, "isLowPower")) break;
     }
 
     const device = chosen_device orelse return error.NoMetalDevice;

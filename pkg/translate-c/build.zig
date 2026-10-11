@@ -174,11 +174,10 @@ pub fn initTranslator(b: *std.Build, options: Options) !Translator {
         .link_system_libs = try marshalSystemLibs(b, options.link_system_libs),
         .default_init = options.default_init,
         .libc_file = switch (options.libc_file) {
-            .detect_darwin => if (options.target.result.os.tag.isDarwin()) libc_file: {
-                switch (try apple_sdk.pathsForTarget(this_dep.builder, options.target.result)) {
-                    inline else => |paths| break :libc_file paths.libc,
-                }
-            } else null,
+            .detect_darwin => if (options.target.result.os.tag.isDarwin())
+                (try apple_sdk.pathsForTarget(this_dep.builder, options.target.result)).libc
+            else
+                null,
             .direct => |libc_file| libc_file,
         },
         .extra_args = options.extra_args,

@@ -183,22 +183,11 @@ const HarfBuzzC = struct {
         try flag_builder.appendSlice(self.builder.allocator, &.{
             "-DHAVE_STDBOOL_H",
         });
-        // Disable ubsan for MSVC: Zig's ubsan runtime cannot be bundled
-        // on Windows (LNK4229), leaving __ubsan_handle_* unresolved when
-        // the static archive is consumed by an external linker.
-        if (self.options.target.result.abi == .msvc) {
-            try flag_builder.appendSlice(self.builder.allocator, &.{
-                "-fno-sanitize=undefined",
-                "-fno-sanitize-trap=undefined",
-            });
-        }
-        if (self.options.target.result.os.tag != .windows) {
-            try flag_builder.appendSlice(self.builder.allocator, &.{
-                "-DHAVE_UNISTD_H",
-                "-DHAVE_SYS_MMAN_H",
-                "-DHAVE_PTHREAD=1",
-            });
-        }
+        try flag_builder.appendSlice(self.builder.allocator, &.{
+            "-DHAVE_UNISTD_H",
+            "-DHAVE_SYS_MMAN_H",
+            "-DHAVE_PTHREAD=1",
+        });
 
         // Freetype flags/non-system include paths
         if (self.options.freetype != null) {
@@ -246,12 +235,7 @@ const HarfBuzzC = struct {
                 .target = target,
                 .optimize = optimize,
                 .link_libc = true,
-                // On MSVC, we must not use linkLibCpp because Zig unconditionally
-                // passes -nostdinc++ and then adds its bundled libc++/libc++abi
-                // include paths, which conflict with MSVC's own C++ runtime
-                // headers. The MSVC SDK include directories (added via linkLibC)
-                // contain both C and C++ headers, so linkLibCpp is not needed.
-                .link_libcpp = target.result.abi != .msvc,
+                .link_libcpp = true,
             }),
             .linkage = .static,
         });

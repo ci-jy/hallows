@@ -6,13 +6,8 @@ _\$XDG_CONFIG_HOME/hallows/config.hallows_
 
 _\$HOME/Library/Application Support/app.hallows/config.hallows_
 
-: **On macOS**, location of the default configuration file. This location takes
+: Location of the default configuration file. This location takes
 precedence over the XDG environment locations.
-
-_\$LOCALAPPDATA/hallows/config.hallows_
-
-: **On Windows**, if _\$XDG_CONFIG_HOME_ is not set, _\$LOCALAPPDATA_ will be searched
-for configuration files.
 
 # ENVIRONMENT
 
@@ -30,12 +25,9 @@ for configuration files.
 
 **$HOME/Library/Application Support/app.hallows**
 
-: **MACOS ONLY** default location for configuration files. This location takes
+: Default location for configuration files. This location takes
 precedence over the XDG environment locations.
 
-**LOCALAPPDATA**
-
-: **WINDOWS ONLY:** alternate location to search for configuration files.
 
 **HALLOWS_LOG**
 

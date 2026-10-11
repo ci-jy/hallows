@@ -1,4 +1,3 @@
-const builtin = @import("builtin");
 const std = @import("std");
 const inputpkg = @import("../input.zig");
 const global = @import("../global.zig");
@@ -263,15 +262,14 @@ test "ghostty_config_trigger: default keybind" {
     }
     // Performable bindings are not tracked in the reverse map,
     // so config_trigger_ should return a default (empty) trigger.
-    if (comptime builtin.target.os.tag.isDarwin()) {
-        const next = try config_trigger_(&cfg, "navigate_search:next");
-        try testing.expectEqual(.physical, next.tag);
-        try testing.expectEqual(.unidentified, next.key.physical);
+    const next = try config_trigger_(&cfg, "navigate_search:next");
+    try testing.expectEqual(.physical, next.tag);
+    try testing.expectEqual(.unidentified, next.key.physical);
 
-        const prev = try config_trigger_(&cfg, "navigate_search:previous");
-        try testing.expectEqual(.physical, prev.tag);
-        try testing.expectEqual(.unidentified, prev.key.physical);
-    }
+    const prev = try config_trigger_(&cfg, "navigate_search:previous");
+    try testing.expectEqual(.physical, prev.tag);
+    try testing.expectEqual(.unidentified, prev.key.physical);
+
     {
         const trigger = try config_trigger_(&cfg, "adjust_selection:left");
         try testing.expectEqual(.physical, trigger.tag);

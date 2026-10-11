@@ -2,7 +2,6 @@ const std = @import("std");
 const assert = @import("../quirks.zig").inlineAssert;
 const Allocator = std.mem.Allocator;
 const Action = @import("Binding.zig").Action;
-const i18n = @import("../os/i18n.zig");
 
 /// A command is a named binding action that can be executed from
 /// something like a command palette.
@@ -77,14 +76,6 @@ pub const Command = struct {
         };
     }
 
-    pub fn translated(self: Command) Command {
-        return .{
-            .action = self.action,
-            .title = std.mem.span(i18n._(self.title)),
-            .description = std.mem.span(i18n._(self.description)),
-        };
-    }
-
     /// Implements a comparison function for std.mem.sortUnstable
     /// and similar functions. The sorting is defined by Hallows
     /// to be what we prefer. If a caller wants some other sorting,
@@ -146,155 +137,155 @@ fn actionCommands(action: Action.Key) []const Command {
 
         .reset => comptime &.{.{
             .action = .reset,
-            .title = i18n.N_("Reset Terminal"),
-            .description = i18n.N_("Reset the terminal to a clean state."),
+            .title = "Reset Terminal",
+            .description = "Reset the terminal to a clean state.",
         }},
 
         .copy_to_clipboard => comptime &.{ .{
             .action = .{ .copy_to_clipboard = .mixed },
-            .title = i18n.N_("Copy to Clipboard"),
-            .description = i18n.N_("Copy the selected text to the clipboard in both plain and styled formats."),
+            .title = "Copy to Clipboard",
+            .description = "Copy the selected text to the clipboard in both plain and styled formats.",
         }, .{
             .action = .{ .copy_to_clipboard = .plain },
-            .title = i18n.N_("Copy Selection as Plain Text to Clipboard"),
-            .description = i18n.N_("Copy the selected text as plain text to the clipboard."),
+            .title = "Copy Selection as Plain Text to Clipboard",
+            .description = "Copy the selected text as plain text to the clipboard.",
         }, .{
             .action = .{ .copy_to_clipboard = .vt },
-            .title = i18n.N_("Copy Selection as ANSI Sequences to Clipboard"),
-            .description = i18n.N_("Copy the selected text as ANSI escape sequences to the clipboard."),
+            .title = "Copy Selection as ANSI Sequences to Clipboard",
+            .description = "Copy the selected text as ANSI escape sequences to the clipboard.",
         }, .{
             .action = .{ .copy_to_clipboard = .html },
-            .title = i18n.N_("Copy Selection as HTML to Clipboard"),
-            .description = i18n.N_("Copy the selected text as HTML to the clipboard."),
+            .title = "Copy Selection as HTML to Clipboard",
+            .description = "Copy the selected text as HTML to the clipboard.",
         } },
 
         .copy_url_to_clipboard => comptime &.{.{
             .action = .copy_url_to_clipboard,
-            .title = i18n.N_("Copy URL to Clipboard"),
-            .description = i18n.N_("Copy the URL under the cursor to the clipboard."),
+            .title = "Copy URL to Clipboard",
+            .description = "Copy the URL under the cursor to the clipboard.",
         }},
 
         .copy_title_to_clipboard => comptime &.{.{
             .action = .copy_title_to_clipboard,
-            .title = i18n.N_("Copy Terminal Title to Clipboard"),
-            .description = i18n.N_("Copy the terminal title to the clipboard. If the terminal title is not set this has no effect."),
+            .title = "Copy Terminal Title to Clipboard",
+            .description = "Copy the terminal title to the clipboard. If the terminal title is not set this has no effect.",
         }},
 
         .paste_from_clipboard => comptime &.{.{
             .action = .paste_from_clipboard,
-            .title = i18n.N_("Paste from Clipboard"),
-            .description = i18n.N_("Paste the contents of the main clipboard."),
+            .title = "Paste from Clipboard",
+            .description = "Paste the contents of the main clipboard.",
         }},
 
         .paste_from_selection => comptime &.{.{
             .action = .paste_from_selection,
-            .title = i18n.N_("Paste from Selection"),
-            .description = i18n.N_("Paste the contents of the selection clipboard."),
+            .title = "Paste from Selection",
+            .description = "Paste the contents of the selection clipboard.",
         }},
 
         .start_search => comptime &.{.{
             .action = .start_search,
-            .title = i18n.N_("Start Search"),
-            .description = i18n.N_("Start a search if one isn't already active."),
+            .title = "Start Search",
+            .description = "Start a search if one isn't already active.",
         }},
 
         .search_selection => comptime &.{.{
             .action = .search_selection,
-            .title = i18n.N_("Search Selection"),
-            .description = i18n.N_("Start a search for the current text selection."),
+            .title = "Search Selection",
+            .description = "Start a search for the current text selection.",
         }},
 
         .end_search => comptime &.{.{
             .action = .end_search,
-            .title = i18n.N_("End Search"),
-            .description = i18n.N_("End the current search if any and hide any GUI elements."),
+            .title = "End Search",
+            .description = "End the current search if any and hide any GUI elements.",
         }},
 
         .navigate_search => comptime &.{ .{
             .action = .{ .navigate_search = .next },
-            .title = i18n.N_("Next Search Result"),
-            .description = i18n.N_("Navigate to the next search result, if any."),
+            .title = "Next Search Result",
+            .description = "Navigate to the next search result, if any.",
         }, .{
             .action = .{ .navigate_search = .previous },
-            .title = i18n.N_("Previous Search Result"),
-            .description = i18n.N_("Navigate to the previous search result, if any."),
+            .title = "Previous Search Result",
+            .description = "Navigate to the previous search result, if any.",
         } },
 
         .increase_font_size => comptime &.{.{
             .action = .{ .increase_font_size = 1 },
-            .title = i18n.N_("Increase Font Size"),
-            .description = i18n.N_("Increase the font size by 1 point."),
+            .title = "Increase Font Size",
+            .description = "Increase the font size by 1 point.",
         }},
 
         .decrease_font_size => comptime &.{.{
             .action = .{ .decrease_font_size = 1 },
-            .title = i18n.N_("Decrease Font Size"),
-            .description = i18n.N_("Decrease the font size by 1 point."),
+            .title = "Decrease Font Size",
+            .description = "Decrease the font size by 1 point.",
         }},
 
         .reset_font_size => comptime &.{.{
             .action = .reset_font_size,
-            .title = i18n.N_("Reset Font Size"),
-            .description = i18n.N_("Reset the font size to the default."),
+            .title = "Reset Font Size",
+            .description = "Reset the font size to the default.",
         }},
 
         .clear_screen => comptime &.{.{
             .action = .clear_screen,
-            .title = i18n.N_("Clear Screen"),
-            .description = i18n.N_("Clear the screen and scrollback."),
+            .title = "Clear Screen",
+            .description = "Clear the screen and scrollback.",
         }},
 
         .select_all => comptime &.{.{
             .action = .select_all,
-            .title = i18n.N_("Select All"),
-            .description = i18n.N_("Select all text on the screen."),
+            .title = "Select All",
+            .description = "Select all text on the screen.",
         }},
 
         .scroll_to_top => comptime &.{.{
             .action = .scroll_to_top,
-            .title = i18n.N_("Scroll to Top"),
-            .description = i18n.N_("Scroll to the top of the screen."),
+            .title = "Scroll to Top",
+            .description = "Scroll to the top of the screen.",
         }},
 
         .scroll_to_bottom => comptime &.{.{
             .action = .scroll_to_bottom,
-            .title = i18n.N_("Scroll to Bottom"),
-            .description = i18n.N_("Scroll to the bottom of the screen."),
+            .title = "Scroll to Bottom",
+            .description = "Scroll to the bottom of the screen.",
         }},
 
         .scroll_to_selection => comptime &.{.{
             .action = .scroll_to_selection,
-            .title = i18n.N_("Scroll to Selection"),
-            .description = i18n.N_("Scroll to the selected text."),
+            .title = "Scroll to Selection",
+            .description = "Scroll to the selected text.",
         }},
 
         .scroll_page_up => comptime &.{.{
             .action = .scroll_page_up,
-            .title = i18n.N_("Scroll Page Up"),
-            .description = i18n.N_("Scroll the screen up by a page."),
+            .title = "Scroll Page Up",
+            .description = "Scroll the screen up by a page.",
         }},
 
         .scroll_page_down => comptime &.{.{
             .action = .scroll_page_down,
-            .title = i18n.N_("Scroll Page Down"),
-            .description = i18n.N_("Scroll the screen down by a page."),
+            .title = "Scroll Page Down",
+            .description = "Scroll the screen down by a page.",
         }},
 
         .write_screen_file => comptime &.{
             .{
                 .action = .{ .write_screen_file = .copy },
-                .title = i18n.N_("Copy Screen to Temporary File and Copy Path"),
-                .description = i18n.N_("Copy the screen contents to a temporary file and copy the path to the clipboard."),
+                .title = "Copy Screen to Temporary File and Copy Path",
+                .description = "Copy the screen contents to a temporary file and copy the path to the clipboard.",
             },
             .{
                 .action = .{ .write_screen_file = .paste },
-                .title = i18n.N_("Copy Screen to Temporary File and Paste Path"),
-                .description = i18n.N_("Copy the screen contents to a temporary file and paste the path to the file."),
+                .title = "Copy Screen to Temporary File and Paste Path",
+                .description = "Copy the screen contents to a temporary file and paste the path to the file.",
             },
             .{
                 .action = .{ .write_screen_file = .open },
-                .title = i18n.N_("Copy Screen to Temporary File and Open"),
-                .description = i18n.N_("Copy the screen contents to a temporary file and open it."),
+                .title = "Copy Screen to Temporary File and Open",
+                .description = "Copy the screen contents to a temporary file and open it.",
             },
 
             .{
@@ -302,24 +293,24 @@ fn actionCommands(action: Action.Key) []const Command {
                     .action = .copy,
                     .emit = .html,
                 } },
-                .title = i18n.N_("Copy Screen as HTML to Temporary File and Copy Path"),
-                .description = i18n.N_("Copy the screen contents as HTML to a temporary file and copy the path to the clipboard."),
+                .title = "Copy Screen as HTML to Temporary File and Copy Path",
+                .description = "Copy the screen contents as HTML to a temporary file and copy the path to the clipboard.",
             },
             .{
                 .action = .{ .write_screen_file = .{
                     .action = .paste,
                     .emit = .html,
                 } },
-                .title = i18n.N_("Copy Screen as HTML to Temporary File and Paste Path"),
-                .description = i18n.N_("Copy the screen contents as HTML to a temporary file and paste the path to the file."),
+                .title = "Copy Screen as HTML to Temporary File and Paste Path",
+                .description = "Copy the screen contents as HTML to a temporary file and paste the path to the file.",
             },
             .{
                 .action = .{ .write_screen_file = .{
                     .action = .open,
                     .emit = .html,
                 } },
-                .title = i18n.N_("Copy Screen as HTML to Temporary File and Open"),
-                .description = i18n.N_("Copy the screen contents as HTML to a temporary file and open it."),
+                .title = "Copy Screen as HTML to Temporary File and Open",
+                .description = "Copy the screen contents as HTML to a temporary file and open it.",
             },
 
             .{
@@ -327,42 +318,42 @@ fn actionCommands(action: Action.Key) []const Command {
                     .action = .copy,
                     .emit = .vt,
                 } },
-                .title = i18n.N_("Copy Screen as ANSI Sequences to Temporary File and Copy Path"),
-                .description = i18n.N_("Copy the screen contents as ANSI escape sequences to a temporary file and copy the path to the clipboard."),
+                .title = "Copy Screen as ANSI Sequences to Temporary File and Copy Path",
+                .description = "Copy the screen contents as ANSI escape sequences to a temporary file and copy the path to the clipboard.",
             },
             .{
                 .action = .{ .write_screen_file = .{
                     .action = .paste,
                     .emit = .vt,
                 } },
-                .title = i18n.N_("Copy Screen as ANSI Sequences to Temporary File and Paste Path"),
-                .description = i18n.N_("Copy the screen contents as ANSI escape sequences to a temporary file and paste the path to the file."),
+                .title = "Copy Screen as ANSI Sequences to Temporary File and Paste Path",
+                .description = "Copy the screen contents as ANSI escape sequences to a temporary file and paste the path to the file.",
             },
             .{
                 .action = .{ .write_screen_file = .{
                     .action = .open,
                     .emit = .vt,
                 } },
-                .title = i18n.N_("Copy Screen as ANSI Sequences to Temporary File and Open"),
-                .description = i18n.N_("Copy the screen contents as ANSI escape sequences to a temporary file and open it."),
+                .title = "Copy Screen as ANSI Sequences to Temporary File and Open",
+                .description = "Copy the screen contents as ANSI escape sequences to a temporary file and open it.",
             },
         },
 
         .write_selection_file => comptime &.{
             .{
                 .action = .{ .write_selection_file = .copy },
-                .title = i18n.N_("Copy Selection to Temporary File and Copy Path"),
-                .description = i18n.N_("Copy the selection contents to a temporary file and copy the path to the clipboard."),
+                .title = "Copy Selection to Temporary File and Copy Path",
+                .description = "Copy the selection contents to a temporary file and copy the path to the clipboard.",
             },
             .{
                 .action = .{ .write_selection_file = .paste },
-                .title = i18n.N_("Copy Selection to Temporary File and Paste Path"),
-                .description = i18n.N_("Copy the selection contents to a temporary file and paste the path to the file."),
+                .title = "Copy Selection to Temporary File and Paste Path",
+                .description = "Copy the selection contents to a temporary file and paste the path to the file.",
             },
             .{
                 .action = .{ .write_selection_file = .open },
-                .title = i18n.N_("Copy Selection to Temporary File and Open"),
-                .description = i18n.N_("Copy the selection contents to a temporary file and open it."),
+                .title = "Copy Selection to Temporary File and Open",
+                .description = "Copy the selection contents to a temporary file and open it.",
             },
 
             .{
@@ -370,24 +361,24 @@ fn actionCommands(action: Action.Key) []const Command {
                     .action = .copy,
                     .emit = .html,
                 } },
-                .title = i18n.N_("Copy Selection as HTML to Temporary File and Copy Path"),
-                .description = i18n.N_("Copy the selection contents as HTML to a temporary file and copy the path to the clipboard."),
+                .title = "Copy Selection as HTML to Temporary File and Copy Path",
+                .description = "Copy the selection contents as HTML to a temporary file and copy the path to the clipboard.",
             },
             .{
                 .action = .{ .write_selection_file = .{
                     .action = .paste,
                     .emit = .html,
                 } },
-                .title = i18n.N_("Copy Selection as HTML to Temporary File and Paste Path"),
-                .description = i18n.N_("Copy the selection contents as HTML to a temporary file and paste the path to the file."),
+                .title = "Copy Selection as HTML to Temporary File and Paste Path",
+                .description = "Copy the selection contents as HTML to a temporary file and paste the path to the file.",
             },
             .{
                 .action = .{ .write_selection_file = .{
                     .action = .open,
                     .emit = .html,
                 } },
-                .title = i18n.N_("Copy Selection as HTML to Temporary File and Open"),
-                .description = i18n.N_("Copy the selection contents as HTML to a temporary file and open it."),
+                .title = "Copy Selection as HTML to Temporary File and Open",
+                .description = "Copy the selection contents as HTML to a temporary file and open it.",
             },
 
             .{
@@ -395,324 +386,287 @@ fn actionCommands(action: Action.Key) []const Command {
                     .action = .copy,
                     .emit = .vt,
                 } },
-                .title = i18n.N_("Copy Selection as ANSI Sequences to Temporary File and Copy Path"),
-                .description = i18n.N_("Copy the selection contents as ANSI escape sequences to a temporary file and copy the path to the clipboard."),
+                .title = "Copy Selection as ANSI Sequences to Temporary File and Copy Path",
+                .description = "Copy the selection contents as ANSI escape sequences to a temporary file and copy the path to the clipboard.",
             },
             .{
                 .action = .{ .write_selection_file = .{
                     .action = .paste,
                     .emit = .vt,
                 } },
-                .title = i18n.N_("Copy Selection as ANSI Sequences to Temporary File and Paste Path"),
-                .description = i18n.N_("Copy the selection contents as ANSI escape sequences to a temporary file and paste the path to the file."),
+                .title = "Copy Selection as ANSI Sequences to Temporary File and Paste Path",
+                .description = "Copy the selection contents as ANSI escape sequences to a temporary file and paste the path to the file.",
             },
             .{
                 .action = .{ .write_selection_file = .{
                     .action = .open,
                     .emit = .vt,
                 } },
-                .title = i18n.N_("Copy Selection as ANSI Sequences to Temporary File and Open"),
-                .description = i18n.N_("Copy the selection contents as ANSI escape sequences to a temporary file and open it."),
+                .title = "Copy Selection as ANSI Sequences to Temporary File and Open",
+                .description = "Copy the selection contents as ANSI escape sequences to a temporary file and open it.",
             },
         },
 
         .new_window => comptime &.{.{
             .action = .new_window,
-            .title = i18n.N_("New Window"),
-            .description = i18n.N_("Open a new window."),
+            .title = "New Window",
+            .description = "Open a new window.",
         }},
 
         .new_tab => comptime &.{.{
             .action = .new_tab,
-            .title = i18n.N_("New Tab"),
-            .description = i18n.N_("Open a new tab."),
+            .title = "New Tab",
+            .description = "Open a new tab.",
         }},
 
         .move_tab => comptime &.{
             .{
                 .action = .{ .move_tab = -1 },
-                .title = i18n.N_("Move Tab Left"),
-                .description = i18n.N_("Move the current tab to the left."),
+                .title = "Move Tab Left",
+                .description = "Move the current tab to the left.",
             },
             .{
                 .action = .{ .move_tab = 1 },
-                .title = i18n.N_("Move Tab Right"),
-                .description = i18n.N_("Move the current tab to the right."),
+                .title = "Move Tab Right",
+                .description = "Move the current tab to the right.",
             },
         },
 
         .move_tab_to_new_window => comptime &.{.{
             .action = .move_tab_to_new_window,
-            .title = i18n.N_("Move Tab to New Window"),
-            .description = i18n.N_("Move the current tab to a new window."),
-        }},
-
-        .toggle_tab_overview => comptime &.{.{
-            .action = .toggle_tab_overview,
-            .title = i18n.N_("Toggle Tab Overview"),
-            .description = i18n.N_("Toggle the tab overview."),
+            .title = "Move Tab to New Window",
+            .description = "Move the current tab to a new window.",
         }},
 
         .prompt_surface_title => comptime &.{.{
             .action = .prompt_surface_title,
-            .title = i18n.N_("Change Terminal Title…"),
-            .description = i18n.N_("Prompt for a new title for the current terminal."),
+            .title = "Change Terminal Title…",
+            .description = "Prompt for a new title for the current terminal.",
         }},
 
         .prompt_tab_title => comptime &.{.{
             .action = .prompt_tab_title,
-            .title = i18n.N_("Change Tab Title…"),
-            .description = i18n.N_("Prompt for a new title for the current tab."),
-        }},
-
-        .prompt_window_title => comptime &.{.{
-            .action = .prompt_window_title,
-            .title = "Change Window Title…",
-            .description = "Prompt for a new title for the current window.",
+            .title = "Change Tab Title…",
+            .description = "Prompt for a new title for the current tab.",
         }},
 
         .new_split => comptime &.{
             .{
                 .action = .{ .new_split = .left },
-                .title = i18n.N_("Split Left"),
-                .description = i18n.N_("Split the terminal to the left."),
+                .title = "Split Left",
+                .description = "Split the terminal to the left.",
             },
             .{
                 .action = .{ .new_split = .right },
-                .title = i18n.N_("Split Right"),
-                .description = i18n.N_("Split the terminal to the right."),
+                .title = "Split Right",
+                .description = "Split the terminal to the right.",
             },
             .{
                 .action = .{ .new_split = .up },
-                .title = i18n.N_("Split Up"),
-                .description = i18n.N_("Split the terminal up."),
+                .title = "Split Up",
+                .description = "Split the terminal up.",
             },
             .{
                 .action = .{ .new_split = .down },
-                .title = i18n.N_("Split Down"),
-                .description = i18n.N_("Split the terminal down."),
+                .title = "Split Down",
+                .description = "Split the terminal down.",
             },
         },
 
         .goto_split => comptime &.{
             .{
                 .action = .{ .goto_split = .previous },
-                .title = i18n.N_("Focus Split: Previous"),
-                .description = i18n.N_("Focus the previous split, if any."),
+                .title = "Focus Split: Previous",
+                .description = "Focus the previous split, if any.",
             },
             .{
                 .action = .{ .goto_split = .next },
-                .title = i18n.N_("Focus Split: Next"),
-                .description = i18n.N_("Focus the next split, if any."),
+                .title = "Focus Split: Next",
+                .description = "Focus the next split, if any.",
             },
             .{
                 .action = .{ .goto_split = .left },
-                .title = i18n.N_("Focus Split: Left"),
-                .description = i18n.N_("Focus the split to the left, if it exists."),
+                .title = "Focus Split: Left",
+                .description = "Focus the split to the left, if it exists.",
             },
             .{
                 .action = .{ .goto_split = .right },
-                .title = i18n.N_("Focus Split: Right"),
-                .description = i18n.N_("Focus the split to the right, if it exists."),
+                .title = "Focus Split: Right",
+                .description = "Focus the split to the right, if it exists.",
             },
             .{
                 .action = .{ .goto_split = .up },
-                .title = i18n.N_("Focus Split: Up"),
-                .description = i18n.N_("Focus the split above, if it exists."),
+                .title = "Focus Split: Up",
+                .description = "Focus the split above, if it exists.",
             },
             .{
                 .action = .{ .goto_split = .down },
-                .title = i18n.N_("Focus Split: Down"),
-                .description = i18n.N_("Focus the split below, if it exists."),
+                .title = "Focus Split: Down",
+                .description = "Focus the split below, if it exists.",
             },
         },
 
         .goto_window => comptime &.{
             .{
                 .action = .{ .goto_window = .previous },
-                .title = i18n.N_("Focus Window: Previous"),
-                .description = i18n.N_("Focus the previous window, if any."),
+                .title = "Focus Window: Previous",
+                .description = "Focus the previous window, if any.",
             },
             .{
                 .action = .{ .goto_window = .next },
-                .title = i18n.N_("Focus Window: Next"),
-                .description = i18n.N_("Focus the next window, if any."),
+                .title = "Focus Window: Next",
+                .description = "Focus the next window, if any.",
             },
         },
 
         .toggle_split_zoom => comptime &.{.{
             .action = .toggle_split_zoom,
-            .title = i18n.N_("Toggle Split Zoom"),
-            .description = i18n.N_("Toggle the zoom state of the current split."),
+            .title = "Toggle Split Zoom",
+            .description = "Toggle the zoom state of the current split.",
         }},
 
         .toggle_readonly => comptime &.{.{
             .action = .toggle_readonly,
-            .title = i18n.N_("Toggle Read-Only Mode"),
-            .description = i18n.N_("Toggle read-only mode for the current surface."),
+            .title = "Toggle Read-Only Mode",
+            .description = "Toggle read-only mode for the current surface.",
         }},
 
         .equalize_splits => comptime &.{.{
             .action = .equalize_splits,
-            .title = i18n.N_("Equalize Splits"),
-            .description = i18n.N_("Equalize the size of all splits."),
+            .title = "Equalize Splits",
+            .description = "Equalize the size of all splits.",
         }},
 
         .reset_window_size => comptime &.{.{
             .action = .reset_window_size,
-            .title = i18n.N_("Reset Window Size"),
-            .description = i18n.N_("Reset the window size to the default."),
+            .title = "Reset Window Size",
+            .description = "Reset the window size to the default.",
         }},
 
         .inspector => comptime &.{.{
             .action = .{ .inspector = .toggle },
-            .title = i18n.N_("Toggle Inspector"),
-            .description = i18n.N_("Toggle the inspector."),
+            .title = "Toggle Inspector",
+            .description = "Toggle the inspector.",
         }},
 
-        .show_gtk_inspector => comptime &.{.{
-            .action = .show_gtk_inspector,
-            .title = i18n.N_("Show the GTK Inspector"),
-            .description = i18n.N_("Show the GTK inspector."),
+        .open_config => comptime &.{.{
+            .action = .{ .open_config = .os_open },
+            .title = "Open Config Using OS editor",
+            .description = "Open the config file with the OS's default editor.",
         }},
-
-        .show_on_screen_keyboard => comptime &.{.{
-            .action = .show_on_screen_keyboard,
-            .title = i18n.N_("Show On-Screen Keyboard"),
-            .description = i18n.N_("Show the on-screen keyboard if present."),
-        }},
-
-        .open_config => comptime &.{
-            .{
-                .action = .{ .open_config = .os_open },
-                .title = i18n.N_("Open Config Using OS editor"),
-                .description = i18n.N_("Open the config file with the OS's default editor."),
-            },
-            .{
-                .action = .{ .open_config = .new_window },
-                .title = i18n.N_("Open Config in New Terminal Window"),
-                .description = i18n.N_("Open the config file in a new window using $EDITOR or $VISUAL."),
-            },
-        },
 
         .reload_config => comptime &.{.{
             .action = .reload_config,
-            .title = i18n.N_("Reload Config"),
-            .description = i18n.N_("Reload the config file."),
+            .title = "Reload Config",
+            .description = "Reload the config file.",
         }},
 
         .close_surface => comptime &.{.{
             .action = .close_surface,
-            .title = i18n.N_("Close Terminal"),
-            .description = i18n.N_("Close the current terminal."),
+            .title = "Close Terminal",
+            .description = "Close the current terminal.",
         }},
 
         .close_tab => comptime &.{
             .{
                 .action = .{ .close_tab = .this },
-                .title = i18n.N_("Close Tab"),
-                .description = i18n.N_("Close the current tab."),
+                .title = "Close Tab",
+                .description = "Close the current tab.",
             },
             .{
                 .action = .{ .close_tab = .other },
-                .title = i18n.N_("Close Other Tabs"),
-                .description = i18n.N_("Close all tabs in this window except the current one."),
+                .title = "Close Other Tabs",
+                .description = "Close all tabs in this window except the current one.",
             },
             .{
                 .action = .{ .close_tab = .right },
-                .title = i18n.N_("Close Tabs to the Right"),
-                .description = i18n.N_("Close all tabs to the right of the current one."),
+                .title = "Close Tabs to the Right",
+                .description = "Close all tabs to the right of the current one.",
             },
         },
 
         .close_window => comptime &.{.{
             .action = .close_window,
-            .title = i18n.N_("Close Window"),
-            .description = i18n.N_("Close the current window."),
+            .title = "Close Window",
+            .description = "Close the current window.",
         }},
 
         .close_all_windows => comptime &.{.{
             .action = .close_all_windows,
-            .title = i18n.N_("Close All Windows"),
-            .description = i18n.N_("Close all windows."),
+            .title = "Close All Windows",
+            .description = "Close all windows.",
         }},
 
         .toggle_maximize => comptime &.{.{
             .action = .toggle_maximize,
-            .title = i18n.N_("Toggle Maximize"),
-            .description = i18n.N_("Toggle the maximized state of the current window."),
+            .title = "Toggle Maximize",
+            .description = "Toggle the maximized state of the current window.",
         }},
 
         .toggle_fullscreen => comptime &.{.{
             .action = .toggle_fullscreen,
-            .title = i18n.N_("Toggle Fullscreen"),
-            .description = i18n.N_("Toggle the fullscreen state of the current window."),
-        }},
-
-        .toggle_window_decorations => comptime &.{.{
-            .action = .toggle_window_decorations,
-            .title = i18n.N_("Toggle Window Decorations"),
-            .description = i18n.N_("Toggle the window decorations."),
+            .title = "Toggle Fullscreen",
+            .description = "Toggle the fullscreen state of the current window.",
         }},
 
         .toggle_window_float_on_top => comptime &.{.{
             .action = .toggle_window_float_on_top,
-            .title = i18n.N_("Toggle Float on Top"),
-            .description = i18n.N_("Toggle the float on top state of the current window."),
+            .title = "Toggle Float on Top",
+            .description = "Toggle the float on top state of the current window.",
         }},
 
         .toggle_secure_input => comptime &.{.{
             .action = .toggle_secure_input,
-            .title = i18n.N_("Toggle Secure Input"),
-            .description = i18n.N_("Toggle secure input mode."),
+            .title = "Toggle Secure Input",
+            .description = "Toggle secure input mode.",
         }},
 
         .toggle_mouse_reporting => comptime &.{.{
             .action = .toggle_mouse_reporting,
-            .title = i18n.N_("Toggle Mouse Reporting"),
-            .description = i18n.N_("Toggle whether mouse events are reported to terminal applications."),
+            .title = "Toggle Mouse Reporting",
+            .description = "Toggle whether mouse events are reported to terminal applications.",
         }},
 
         .toggle_file_tree => comptime &.{.{
             .action = .toggle_file_tree,
-            .title = i18n.N_("Toggle File Tree"),
-            .description = i18n.N_("Show or hide the file tree sidebar."),
+            .title = "Toggle File Tree",
+            .description = "Show or hide the file tree sidebar.",
         }},
 
         .toggle_background_opacity => comptime &.{.{
             .action = .toggle_background_opacity,
-            .title = i18n.N_("Toggle Background Opacity"),
-            .description = i18n.N_("Toggle the background opacity of a window that started transparent."),
+            .title = "Toggle Background Opacity",
+            .description = "Toggle the background opacity of a window that started transparent.",
         }},
 
         .check_for_updates => comptime &.{.{
             .action = .check_for_updates,
-            .title = i18n.N_("Check for Updates"),
-            .description = i18n.N_("Check for updates to the application."),
+            .title = "Check for Updates",
+            .description = "Check for updates to the application.",
         }},
 
         .undo => comptime &.{.{
             .action = .undo,
-            .title = i18n.N_("Undo"),
-            .description = i18n.N_("Undo the last action."),
+            .title = "Undo",
+            .description = "Undo the last action.",
         }},
 
         .redo => comptime &.{.{
             .action = .redo,
-            .title = i18n.N_("Redo"),
-            .description = i18n.N_("Redo the last undone action."),
+            .title = "Redo",
+            .description = "Redo the last undone action.",
         }},
 
         .quit => comptime &.{.{
             .action = .quit,
-            .title = i18n.N_("Quit"),
-            .description = i18n.N_("Quit the application."),
+            .title = "Quit",
+            .description = "Quit the application.",
         }},
 
         .text => comptime &.{.{
             .action = .{ .text = "👻" },
-            .title = i18n.N_("Hallows"),
-            .description = i18n.N_("Put a little Hallows in your terminal."),
+            .title = "Hallows",
+            .description = "Put a little Hallows in your terminal.",
         }},
 
         // No commands because they're parameterized and there
@@ -725,7 +679,6 @@ fn actionCommands(action: Action.Key) []const Command {
         .set_font_size,
         .set_surface_title,
         .set_tab_title,
-        .set_window_title,
         .search,
         .scroll_to_row,
         .scroll_page_fractional,

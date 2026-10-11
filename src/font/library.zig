@@ -9,17 +9,12 @@ const font = @import("main.zig");
 /// Library implementation for the compile options.
 pub const Library = switch (options.backend) {
     // Freetype requires a state library
-    .freetype,
-    .freetype_windows,
-    .fontconfig_freetype,
-    .coretext_freetype,
-    => FreetypeLibrary,
+    .coretext_freetype => FreetypeLibrary,
 
-    // Some backends such as CT and Canvas don't have a "library"
+    // CoreText doesn't have a "library"
     .coretext,
     .coretext_harfbuzz,
     .coretext_noshape,
-    .web_canvas,
     => NoopLibrary,
 };
 

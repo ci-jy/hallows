@@ -1,5 +1,4 @@
 const std = @import("std");
-const build_config = @import("../build_config.zig");
 const terminal = @import("../terminal/main.zig");
 
 /// ContentScale is the ratio between the current DPI and the platform's
@@ -42,22 +41,7 @@ pub const Clipboard = enum(Backing) {
     selection = 1,
     primary = 2,
 
-    // Our backing isn't is as small as we can in Zig, but a full
-    // C int if we're binding to C APIs.
-    const Backing = switch (build_config.app_runtime) {
-        .gtk => c_int,
-        else => u2,
-    };
-
-    /// Make this a valid gobject if we're in a GTK environment.
-    pub const getGObjectType = switch (build_config.app_runtime) {
-        .gtk => @import("gobject").ext.defineEnum(
-            Clipboard,
-            .{ .name = "GhosttyApprtClipboard" },
-        ),
-
-        .none => void,
-    };
+    const Backing = u2;
 };
 
 pub const ClipboardContent = struct {
@@ -210,16 +194,6 @@ pub const ClipboardRequest = union(ClipboardRequestType) {
             var arena = self.arena;
             arena.deinit();
         }
-    };
-
-    /// Make this a valid gobject if we're in a GTK environment.
-    pub const getGObjectType = switch (build_config.app_runtime) {
-        .gtk => @import("gobject").ext.defineBoxed(
-            ClipboardRequest,
-            .{ .name = "GhosttyClipboardRequest" },
-        ),
-
-        .none => void,
     };
 };
 

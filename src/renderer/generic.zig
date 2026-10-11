@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const global = @import("../global.zig");
 const xev = global.xev;
 const wuffs = @import("wuffs");
@@ -7,7 +6,6 @@ const apprt = @import("../apprt.zig");
 const configpkg = @import("../config.zig");
 const font = @import("../font/main.zig");
 const inputpkg = @import("../input.zig");
-const os = @import("../os/main.zig");
 const terminal = @import("../terminal/main.zig");
 const renderer = @import("../renderer.zig");
 const math = @import("../math.zig");
@@ -33,15 +31,9 @@ const getConstraint = @import("../font/nerd_font_attributes.zig").getConstraint;
 
 const FileType = @import("../file_type.zig").FileType;
 
-const macos = switch (builtin.os.tag) {
-    .macos => @import("macos"),
-    else => void,
-};
+const macos = @import("macos");
 
-const DisplayLink = switch (builtin.os.tag) {
-    .macos => *macos.video.DisplayLink,
-    else => void,
-};
+const DisplayLink = *macos.video.DisplayLink;
 
 const log = std.log.scoped(.generic_renderer);
 
@@ -80,17 +72,11 @@ const log = std.log.scoped(.generic_renderer);
 ///
 /// [ Texture ] - An abstraction over a GPU texture.
 ///
-/// [ ExportedFrame ] - A finished frame ready to be consumed by the apprt
-///                     in case that the frame needs to be composited with
-///                     UI elements by the graphical toolkit manually.
-///
 pub fn Renderer(comptime GraphicsAPI: type) type {
     return struct {
         const Self = @This();
 
         pub const API = GraphicsAPI;
-
-        pub const ExportedFrame = if (@hasDecl(GraphicsAPI, "ExportedFrame")) GraphicsAPI.ExportedFrame else void;
 
         /// Whether +Y is down in the coordinate space of exported
         /// frames. Apprts use this to orient frames when presenting.
@@ -117,15 +103,6 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
 
         /// The mailbox for communicating with the window.
         surface_mailbox: apprt.surface.Mailbox,
-
-        /// The latest exported frame ready to be consumed by an apprt
-        /// who needs to manually composite the frame with UI elements.
-        /// Previously exported frames are released when a new frame is
-        /// exported and pushed onto the queue.
-        ///
-        /// Unused if the renderer does not need to export frames to
-        /// present its rendered frame.
-        latest_frame: LatestFrame = .{},
 
         /// Current font metrics defining our grid.
         grid_metrics: font.Metrics,
@@ -833,8 +810,6 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
             if (self.search_selected_match) |*m| m.arena.deinit();
             if (self.search_matches) |*m| m.arena.deinit();
 
-            self.latest_frame.deinit(global.io());
-
             if (DisplayLink != void) {
                 if (self.display_link) |display_link| {
                     display_link.stop() catch {};
@@ -950,104 +925,6 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
             // is gone which is fine.
             const display_link = self.display_link orelse return;
             display_link.stop() catch {};
-        }
-
-        /// This is called by the GTK apprt after the surface is
-        /// reinitialized (e.g. after the widget is re-realized following
-        /// a display change or reparenting).
-        pub fn displayRealized(self: *Self) !void {
-            // If our API has to do things on realize, let it.
-            if (@hasDecl(GraphicsAPI, "displayRealized")) {
-                self.api.displayRealized();
-            }
-
-            // Lock the draw mutex so that we can safely update state.
-            self.draw_mutex.lockUncancelable(global.io());
-            defer self.draw_mutex.unlock(global.io());
-
-            // Mark the display as realized. The render thread will lazily
-            // rebuild the swap chain and shaders on the next `drawFrame`,
-            // which is the right place for GL resource creation (it
-            // guarantees a current context on the render thread).
-            self.display_realized = true;
-            self.reinitialize_shaders = true;
-            self.target_config_modified = 1;
-        }
-
-        /// This is called when the surface is being unrealized.
-        /// This can happen because the surface is being closed but
-        /// also when moving the window between displays or splitting.
-        ///
-        /// This runs on the main thread and only updates CPU-side state
-        /// here; resource cleanup happens on the render thread via
-        /// `releaseGpuResources`.
-        pub fn displayUnrealized(self: *Self) void {
-            // Lock the draw mutex so that we can safely update state.
-            self.draw_mutex.lockUncancelable(global.io());
-            defer self.draw_mutex.unlock(global.io());
-
-            // Clearing `display_realized` ensures drawFrame doesn't attempt
-            // to rebuild the swap chain or make any graphics API calls.
-            // The actual GPU resource release is done by the render thread.
-            self.display_realized = false;
-        }
-
-        /// A thread-safe, single-slot "latest wins" queue. The render thread
-        /// calls `push` with the latest frame; the apprt calls `take` in its
-        /// snapshot handler to grab the most recent frame. Old frames are
-        /// dropped and released. For a terminal this is correct — we never
-        /// want to queue up frames behind a slow compositor.
-        const LatestFrame = struct {
-            const Self = @This();
-            mutex: std.Io.Mutex = .init,
-            latest: ?ExportedFrame = null,
-
-            pub fn push(self: *LatestFrame, io: std.Io, value: ExportedFrame) void {
-                if (comptime ExportedFrame == void) return;
-
-                self.mutex.lockUncancelable(io);
-                defer self.mutex.unlock(io);
-                if (self.latest) |*old| old.deinit();
-                self.latest = value;
-            }
-
-            pub fn take(self: *LatestFrame, io: std.Io) ?ExportedFrame {
-                if (comptime ExportedFrame == void) return null;
-
-                self.mutex.lockUncancelable(io);
-                defer self.mutex.unlock(io);
-                const result = self.latest orelse return null;
-                self.latest = null;
-                return result;
-            }
-
-            pub fn deinit(self: *LatestFrame, io: std.Io) void {
-                if (comptime ExportedFrame == void) return;
-
-                self.mutex.lockUncancelable(io);
-                defer self.mutex.unlock(io);
-                if (self.latest) |*v| v.deinit();
-                self.latest = null;
-            }
-        };
-
-        /// Push the latest completed frame, replacing if one previously
-        /// existed. Called on the render thread.
-        ///
-        /// Has no effect for renderers that do not export frames
-        /// (i.e. `ExportedFrame == void`).
-        pub fn pushFrame(self: *Self, frame: ExportedFrame) void {
-            return self.latest_frame.push(global.io(), frame);
-        }
-
-        /// Take the latest completed frame for the apprt to composite.
-        /// Returns null if no frame is available. The caller takes
-        /// ownership of the returned frame. Called on the main thread.
-        ///
-        /// Has no effect for renderers that do not export frames
-        /// (i.e. `ExportedFrame == void`).
-        pub fn takeFrame(self: *Self) ?ExportedFrame {
-            return self.latest_frame.take(global.io());
         }
 
         fn displayLinkCallback(
@@ -1650,16 +1527,15 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
                     @intFromFloat(@round(self.config.background_opacity * 255.0)),
                 };
 
-                // If we're on macOS and have glass styles, we remove
-                // the background opacity because the glass effect handles
-                // it.
-                if (comptime builtin.os.tag == .macos) switch (self.config.background_blur) {
+                // If we have glass styles, we remove the background opacity
+                // because the glass effect handles it.
+                switch (self.config.background_blur) {
                     .@"macos-glass-regular",
                     .@"macos-glass-clear",
                     => self.uniforms.bg_color[3] = 0,
 
                     else => {},
-                };
+                }
 
                 // Prepare our overlay image for upload (or unload). This
                 // has to use our general allocator since it modifies
@@ -1734,8 +1610,7 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
             if (surface_size.width == 0 or surface_size.height == 0) return false;
 
             // If we have no graphics context we can't draw. This is
-            // only the case while unrealized (GTK) or after the render
-            // thread exits; displayRealized rebuilds the swap chain.
+            // only the case after the render thread exits.
             if (!self.display_realized) return false;
 
             // Get our swap chain, rebuilding it if it was released

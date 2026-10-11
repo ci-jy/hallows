@@ -1,32 +1,21 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const build_config = @import("../build_config.zig");
 const options = @import("main.zig").options;
 const config = @import("../config.zig");
 const freetype = @import("face/freetype.zig");
 const coretext = @import("face/coretext.zig");
-pub const web_canvas = @import("face/web_canvas.zig");
 
 /// Face implementation for the compile options.
 pub const Face = switch (options.backend) {
-    .freetype,
-    .freetype_windows,
-    .fontconfig_freetype,
-    .coretext_freetype,
-    => freetype.Face,
+    .coretext_freetype => freetype.Face,
 
     .coretext,
     .coretext_harfbuzz,
     .coretext_noshape,
     => coretext.Face,
-
-    .web_canvas => web_canvas.Face,
 };
 
-/// If a DPI can't be calculated, this DPI is used. This is probably
-/// wrong on modern devices so it is highly recommended you get the DPI
-/// using whatever platform method you can.
-pub const default_dpi = if (builtin.os.tag == .macos) 72 else 96;
+/// If a DPI can't be calculated, this DPI is used.
+pub const default_dpi = 72;
 
 /// These are the flags to customize how freetype loads fonts. This is
 /// only non-void if the freetype backend is enabled.
@@ -56,16 +45,6 @@ pub const DesiredSize = struct {
         // 1 point = 1/72 inch
         return (self.points * @as(f32, @floatFromInt(self.ydpi))) / 72;
     }
-
-    /// Make this a valid gobject if we're in a GTK environment.
-    pub const getGObjectType = switch (build_config.app_runtime) {
-        .gtk => @import("gobject").ext.defineBoxed(
-            DesiredSize,
-            .{ .name = "GhosttyFontDesiredSize" },
-        ),
-
-        .none => void,
-    };
 };
 
 /// A font variation setting. The best documentation for this I know of

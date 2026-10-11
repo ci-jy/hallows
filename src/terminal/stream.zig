@@ -704,7 +704,7 @@ pub fn Stream(comptime H: type) type {
 
         inline fn nextSliceUntracked(self: *Self, input: []const u8) void {
             // Byte-at-a-time parsing in debug mode only. Even without
-            // SIMD support (build_options.simd == false, e.g. wasm), the
+            // SIMD support (build_options.simd == false), the
             // batched path below is much faster than per-byte dispatch
             // because it decodes UTF-8 in bulk (via scalar fallbacks) and
             // hands printable runs to the handler as print_slice actions.
@@ -3175,8 +3175,7 @@ fn logUnsupportedOnce(
     key: u16,
 ) void {
     // u32 slots so every u16 key is representable alongside an empty
-    // sentinel and so 32-bit targets (e.g. wasm32) have native
-    // atomics.
+    // sentinel and so 32-bit targets have native atomics.
     const empty = std.math.maxInt(u32);
     const Static = struct {
         var seen: [16]u32 = @splat(empty);

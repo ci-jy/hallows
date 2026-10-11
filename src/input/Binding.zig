@@ -5,7 +5,6 @@ const Binding = @This();
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const assert = @import("../quirks.zig").inlineAssert;
-const build_config = @import("../build_config.zig");
 const uucode = @import("uucode");
 const EntryFormatter = @import("../config/formatter.zig").EntryFormatter;
 const deepEqual = @import("../datastruct/comparison.zig").deepEqual;
@@ -590,13 +589,6 @@ pub const Action = union(enum) {
     /// Move a tab to a new window.
     move_tab_to_new_window,
 
-    /// Toggle the tab overview.
-    ///
-    /// This is only supported on Linux and when the system's libadwaita
-    /// version is 1.4 or newer. The current libadwaita version can be
-    /// found by running `hallows +version`.
-    toggle_tab_overview,
-
     /// Change the title of the current focused surface via a pop-up prompt.
     prompt_surface_title,
 
@@ -604,13 +596,6 @@ pub const Action = union(enum) {
     /// title set via this prompt overrides any title set by the terminal
     /// and persists across focus changes within the tab.
     prompt_tab_title,
-
-    /// Change the title of the current window via a pop-up prompt. The
-    /// title set via this prompt overrides any title set by the terminal
-    /// and persists across focus changes within the tab.
-    ///
-    /// Only implemented on Linux.
-    prompt_window_title,
 
     /// Set the title for the current focused surface.
     ///
@@ -621,13 +606,6 @@ pub const Action = union(enum) {
     ///
     /// If the title is empty, the tab title override is cleared.
     set_tab_title: []const u8,
-
-    /// Set the title for the current focused window.
-    ///
-    /// If the title is empty, the tab title override is cleared.
-    ///
-    /// Only implement on Linux.
-    set_window_title: []const u8,
 
     /// Create a new split in the specified direction.
     ///
@@ -681,8 +659,6 @@ pub const Action = union(enum) {
     /// Reset the window to the default size. The "default size" is the
     /// size that a new window would be created with. This has no effect
     /// if the window is fullscreen.
-    ///
-    /// Only implemented on macOS.
     reset_window_size,
 
     /// Control the visibility of the terminal inspector.
@@ -690,26 +666,10 @@ pub const Action = union(enum) {
     /// Valid arguments: `toggle`, `show`, `hide`.
     inspector: InspectorMode,
 
-    /// Show the GTK inspector.
-    ///
-    /// Has no effect on macOS.
-    show_gtk_inspector,
-
-    /// Show the on-screen keyboard if one is present.
-    ///
-    /// Only implemented on Linux (GTK). On GNOME, the "Screen Keyboard"
-    /// accessibility feature must be turned on, which can be found under
-    /// Settings > Accessibility > Typing. Other platforms are as of now
-    /// untested.
-    show_on_screen_keyboard,
-
     /// Open the configuration file in an editor.
     ///
     /// * `os_open`: Use the OS's default editor to edit the configuration file.
     ///   This is the default action. (Available since 1.4.0)
-    /// * `new_window`: Launch the editor specified in `$EDITOR` or `$VISUAL` in
-    ///   a new Hallows window to edit the configuration file. GTK only. (Available
-    ///   since 1.4.0.)
     open_config: OpenConfig,
 
     /// Reload the configuration.
@@ -767,17 +727,10 @@ pub const Action = union(enum) {
     /// Fullscreen or unfullscreen the current window.
     toggle_fullscreen,
 
-    /// Toggle window decorations (titlebar, buttons, etc.) for the current window.
-    ///
-    /// Only implemented on Linux.
-    toggle_window_decorations,
-
     /// Toggle whether the terminal window should always float on top of other
     /// windows even when unfocused.
     ///
     /// Terminal windows always start as normal (not float-on-top) windows.
-    ///
-    /// Only implemented on macOS.
     toggle_window_float_on_top,
 
     /// Toggle secure input mode.
@@ -807,9 +760,6 @@ pub const Action = union(enum) {
     /// The command palette is a popup that lets you see what actions
     /// you can perform, their associated keybindings (if any), a search bar
     /// to filter the actions, and the ability to then execute the action.
-    ///
-    /// This requires libadwaita 1.5 or newer on Linux. The current libadwaita
-    /// version can be found by running `hallows +version`.
     toggle_command_palette,
 
     /// Toggle the file tree.
@@ -821,8 +771,6 @@ pub const Action = union(enum) {
     ///
     /// The working directory comes from shell integration (OSC 7), so the
     /// tree is empty for remote shells.
-    ///
-    /// Only implemented on macOS.
     toggle_file_tree,
 
     /// Toggle the quick terminal.
@@ -853,21 +801,8 @@ pub const Action = union(enum) {
     ///     restored when the application is restarted on systems that support
     ///     window restoration like macOS.
     ///
-    ///   - On Linux, the quick terminal is only supported on Wayland and not
-    ///     X11, and only on Wayland compositors that support the `wlr-layer-shell-v1`
-    ///     protocol. In practice, this means that only GNOME users would not be
-    ///     able to use this feature.
-    ///
-    ///   - On Linux, slide-in animations are only supported on KDE, and when
-    ///     the "Sliding Popups" KWin plugin is enabled.
-    ///
-    ///     If you do not have this plugin enabled, open System Settings > Apps
-    ///     & Windows > Window Management > Desktop Effects, and enable the
-    ///     plugin in the plugin list. Hallows would then need to be restarted
-    ///     fully for this to take effect.
-    ///
-    ///   - Quick terminal tabs are only supported on Linux and not on macOS.
-    ///     This is because tabs on macOS require a title bar.
+    ///   - Quick terminal tabs are not supported because tabs on macOS
+    ///     require a title bar.
     ///
     ///   - On macOS, a fullscreened quick terminal will always be in non-native
     ///     fullscreen mode. This is a requirement due to how the quick terminal
@@ -882,8 +817,6 @@ pub const Action = union(enum) {
     /// to the next application as determined by the OS.
     ///
     /// Note: When the focused surface is fullscreen, this method does nothing.
-    ///
-    /// Only implemented on macOS.
     toggle_visibility,
 
     /// Toggle the window background opacity between transparent and opaque.
@@ -892,13 +825,9 @@ pub const Action = union(enum) {
     ///
     /// When `background-opacity` is less than 1, this action will either make
     /// the window transparent or not depending on its current transparency state.
-    ///
-    /// Only implemented on macOS.
     toggle_background_opacity,
 
     /// Check for updates.
-    ///
-    /// Only implemented on macOS.
     check_for_updates,
 
     /// Undo the last undoable action for the focused surface or terminal,
@@ -921,8 +850,6 @@ pub const Action = union(enum) {
     /// bounded memory usage over time, closed surfaces don't continue running
     /// in the background indefinitely, and the keybinds become available
     /// for terminal applications to use.
-    ///
-    /// Only implemented on macOS.
     undo,
 
     /// Redo the last undoable action for the focused surface or terminal,
@@ -1003,16 +930,6 @@ pub const Action = union(enum) {
     crash: CrashThread,
 
     pub const Key = @typeInfo(Action).@"union".tag_type.?;
-
-    /// Make this a valid gobject if we're in a GTK environment.
-    pub const getGObjectType = switch (build_config.app_runtime) {
-        .gtk => @import("gobject").ext.defineBoxed(
-            Action,
-            .{ .name = "GhosttyBindingAction" },
-        ),
-
-        .none => void,
-    };
 
     pub const CrashThread = enum {
         main,
@@ -1222,9 +1139,6 @@ pub const Action = union(enum) {
         /// Open the config in the OS default editor.
         os_open,
 
-        /// Open the config in a new window using $EDITOR or $VISUAL
-        new_window,
-
         pub const default: OpenConfig = .os_open;
     };
 
@@ -1381,7 +1295,6 @@ pub const Action = union(enum) {
             .toggle_quick_terminal,
             .toggle_visibility,
             .check_for_updates,
-            .show_gtk_inspector,
             => .app,
 
             // These are app but can be special-cased in a surface context.
@@ -1412,10 +1325,8 @@ pub const Action = union(enum) {
             .set_font_size,
             .prompt_surface_title,
             .prompt_tab_title,
-            .prompt_window_title,
             .set_surface_title,
             .set_tab_title,
-            .set_window_title,
             .clear_screen,
             .select_all,
             .scroll_to_top,
@@ -1436,14 +1347,12 @@ pub const Action = union(enum) {
             .close_window,
             .toggle_maximize,
             .toggle_fullscreen,
-            .toggle_window_decorations,
             .toggle_window_float_on_top,
             .toggle_secure_input,
             .toggle_mouse_reporting,
             .toggle_command_palette,
             .toggle_file_tree,
             .toggle_background_opacity,
-            .show_on_screen_keyboard,
             .reset_window_size,
             .activate_key_table,
             .activate_key_table_once,
@@ -1464,7 +1373,6 @@ pub const Action = union(enum) {
             .goto_tab,
             .move_tab,
             .move_tab_to_new_window,
-            .toggle_tab_overview,
             .new_split,
             .goto_split,
             .goto_window,

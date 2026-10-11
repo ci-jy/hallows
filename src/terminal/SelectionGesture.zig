@@ -80,9 +80,6 @@ const Selection = @import("Selection.zig");
 const Terminal = @import("Terminal.zig");
 const point = @import("point.zig");
 
-const freestanding_wasm = builtin.target.cpu.arch == .wasm32 and
-    builtin.target.os.tag == .freestanding;
-
 /// The tracked pin of the initial left click along with the screen
 /// that the pin is part of.
 left_click_pin: ?*Pin,

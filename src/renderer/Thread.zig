@@ -3,7 +3,6 @@
 pub const Thread = @This();
 
 const std = @import("std");
-const builtin = @import("builtin");
 const global = @import("../global.zig");
 const xev = global.xev;
 const crash = @import("../crash/main.zig");
@@ -203,9 +202,7 @@ fn threadMain_(self: *Thread) !void {
     // Right now, on Darwin, `std.Thread.setName` can only name the current
     // thread, and we have no way to get the current thread from within it,
     // so instead we use this code to name the thread instead.
-    if (builtin.os.tag.isDarwin()) {
-        internal_os.macos.pthread_setname_np(&"renderer".*);
-    }
+    internal_os.macos.pthread_setname_np(&"renderer".*);
 
     // Setup our crash metadata
     crash.sentry.thread_state = .{
@@ -257,9 +254,6 @@ fn threadMain_(self: *Thread) !void {
 }
 
 fn setQosClass(self: *const Thread) void {
-    // Thread QoS classes are only relevant on macOS.
-    if (comptime !builtin.target.os.tag.isDarwin()) return;
-
     const class: internal_os.macos.QosClass = class: {
         // If we aren't visible (our view is fully occluded) then we
         // always drop our rendering priority down because it's just
@@ -292,11 +286,8 @@ fn drainMailbox(self: *Thread) !void {
     //
     // This is effectively an @autoreleasepool{} block, which we need in
     // order to ensure that autoreleased objects are properly released.
-    const pool = if (builtin.os.tag.isDarwin())
-        @import("objc").AutoreleasePool.init()
-    else
-        void;
-    defer if (builtin.os.tag.isDarwin()) pool.deinit();
+    const pool = @import("objc").AutoreleasePool.init();
+    defer pool.deinit();
 
     while (self.mailbox.pop(global.io())) |message| {
         log.debug("mailbox message={}", .{message});

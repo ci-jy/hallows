@@ -1157,35 +1157,6 @@ test hasCodepoint {
     try testing.expect(!c.hasCodepoint(idx, '🥸', .{ .any = {} }));
 }
 
-test "hasCodepoint emoji default graphical" {
-    if (options.backend != .fontconfig_freetype) return error.SkipZigTest;
-
-    const testing = std.testing;
-    const alloc = testing.allocator;
-    const testEmoji = font.embedded.emoji;
-
-    var lib = try Library.init(alloc);
-    defer lib.deinit();
-
-    var c = init();
-    defer c.deinit(alloc);
-    c.load_options = .{ .library = lib };
-
-    const idx = try c.add(alloc, try .init(
-        lib,
-        testEmoji,
-        .{ .size = .{ .points = 12, .xdpi = 96, .ydpi = 96 } },
-    ), .{
-        .style = .regular,
-        .fallback = false,
-        .size_adjustment = .none,
-    });
-
-    try testing.expect(!c.hasCodepoint(idx, 'A', .{ .any = {} }));
-    try testing.expect(c.hasCodepoint(idx, '🥸', .{ .any = {} }));
-    // TODO(fontmem): test explicit/implicit
-}
-
 test "metrics" {
     const testing = std.testing;
     const alloc = testing.allocator;
@@ -1394,9 +1365,6 @@ test "adjusted sizes" {
 }
 
 test "face metrics" {
-    // The web canvas backend doesn't calculate face metrics, only cell metrics
-    if (options.backend != .web_canvas) return error.SkipZigTest;
-
     const testing = std.testing;
     const alloc = testing.allocator;
     const narrowFont = font.embedded.cozette;
@@ -1437,15 +1405,12 @@ test "face metrics" {
     const narrowMetricsExpected = font.Metrics.FaceMetrics{
         .px_per_em = 16.0,
         .cell_width = switch (options.backend) {
-            .freetype,
-            .fontconfig_freetype,
             .coretext_freetype,
             => 8.0,
             .coretext,
             .coretext_harfbuzz,
             .coretext_noshape,
             => 7.3828125,
-            .web_canvas => unreachable,
         },
         .ascent = 12.3046875,
         .descent = -3.6953125,
@@ -1457,29 +1422,23 @@ test "face metrics" {
         .cap_height = 9.84375,
         .ex_height = 7.3828125,
         .ascii_height = switch (options.backend) {
-            .freetype,
-            .fontconfig_freetype,
             .coretext_freetype,
             => 18.0625,
             .coretext,
             .coretext_harfbuzz,
             .coretext_noshape,
             => 16.0,
-            .web_canvas => unreachable,
         },
     };
     const wideMetricsExpected = font.Metrics.FaceMetrics{
         .px_per_em = 16.0,
         .cell_width = switch (options.backend) {
-            .freetype,
-            .fontconfig_freetype,
             .coretext_freetype,
             => 10.0,
             .coretext,
             .coretext_harfbuzz,
             .coretext_noshape,
             => 9.6,
-            .web_canvas => unreachable,
         },
         .ascent = 14.72,
         .descent = -3.52,
@@ -1491,15 +1450,12 @@ test "face metrics" {
         .cap_height = 11.36,
         .ex_height = 8.48,
         .ascii_height = switch (options.backend) {
-            .freetype,
-            .fontconfig_freetype,
             .coretext_freetype,
             => 16.0,
             .coretext,
             .coretext_harfbuzz,
             .coretext_noshape,
             => 15.472000000000001,
-            .web_canvas => unreachable,
         },
     };
 

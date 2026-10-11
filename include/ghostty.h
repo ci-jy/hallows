@@ -69,7 +69,6 @@ typedef void* ghostty_inspector_t;
 typedef enum {
   GHOSTTY_PLATFORM_INVALID,
   GHOSTTY_PLATFORM_MACOS,
-  GHOSTTY_PLATFORM_IOS,
 } ghostty_platform_e;
 
 typedef enum {
@@ -490,13 +489,8 @@ typedef struct {
   void* nsview;
 } ghostty_platform_macos_s;
 
-typedef struct {
-  void* uiview;
-} ghostty_platform_ios_s;
-
 typedef union {
   ghostty_platform_macos_s macos;
-  ghostty_platform_ios_s ios;
 } ghostty_platform_u;
 
 typedef enum {
@@ -719,7 +713,6 @@ typedef struct {
 typedef enum {
   GHOSTTY_PROMPT_TITLE_SURFACE,
   GHOSTTY_PROMPT_TITLE_TAB,
-  GHOSTTY_PROMPT_TITLE_WINDOW,
 } ghostty_action_prompt_title_e;
 
 // apprt.action.Pwd.C
@@ -731,8 +724,6 @@ typedef struct {
 typedef enum {
   // Open the config in the OS default editor.
   GHOSTTY_ACTION_OPEN_CONFIG_OS_OPEN,
-  // Open the config in a new window using $EDITOR or $VISUAL
-  GHOSTTY_ACTION_OPEN_CONFIG_NEW_WINDOW,
 } ghostty_action_open_config_e;
 
 // terminal.MouseShape
@@ -987,8 +978,6 @@ typedef enum {
   GHOSTTY_ACTION_CLOSE_ALL_WINDOWS,
   GHOSTTY_ACTION_TOGGLE_MAXIMIZE,
   GHOSTTY_ACTION_TOGGLE_FULLSCREEN,
-  GHOSTTY_ACTION_TOGGLE_TAB_OVERVIEW,
-  GHOSTTY_ACTION_TOGGLE_WINDOW_DECORATIONS,
   GHOSTTY_ACTION_TOGGLE_QUICK_TERMINAL,
   GHOSTTY_ACTION_TOGGLE_COMMAND_PALETTE,
   GHOSTTY_ACTION_TOGGLE_VISIBILITY,
@@ -1008,13 +997,11 @@ typedef enum {
   GHOSTTY_ACTION_SCROLLBAR,
   GHOSTTY_ACTION_RENDER,
   GHOSTTY_ACTION_INSPECTOR,
-  GHOSTTY_ACTION_SHOW_GTK_INSPECTOR,
   GHOSTTY_ACTION_RENDER_INSPECTOR,
   GHOSTTY_ACTION_EXPORT_TERMINAL_IO,
   GHOSTTY_ACTION_DESKTOP_NOTIFICATION,
   GHOSTTY_ACTION_SET_TITLE,
   GHOSTTY_ACTION_SET_TAB_TITLE,
-  GHOSTTY_ACTION_SET_WINDOW_TITLE,
   GHOSTTY_ACTION_PROMPT_TITLE,
   GHOSTTY_ACTION_PWD,
   GHOSTTY_ACTION_MOUSE_SHAPE,
@@ -1039,7 +1026,6 @@ typedef enum {
   GHOSTTY_ACTION_OPEN_URL,
   GHOSTTY_ACTION_SHOW_CHILD_EXITED,
   GHOSTTY_ACTION_PROGRESS_REPORT,
-  GHOSTTY_ACTION_SHOW_ON_SCREEN_KEYBOARD,
   GHOSTTY_ACTION_COMMAND_FINISHED,
   GHOSTTY_ACTION_START_SEARCH,
   GHOSTTY_ACTION_END_SEARCH,
@@ -1137,45 +1123,12 @@ typedef struct {
   ghostty_runtime_close_surface_cb close_surface_cb;
 } ghostty_runtime_config_s;
 
-// apprt.ipc.Target.Key
-typedef enum {
-  GHOSTTY_IPC_TARGET_CLASS,
-  GHOSTTY_IPC_TARGET_DETECT,
-} ghostty_ipc_target_tag_e;
-
-typedef union {
-  char *klass;
-} ghostty_ipc_target_u;
-
-typedef struct {
-  ghostty_ipc_target_tag_e tag;
-  ghostty_ipc_target_u target;
-} chostty_ipc_target_s;
-
-// apprt.ipc.Action.NewWindow
-typedef struct {
-  // This should be a null terminated list of strings.
-  const char **arguments;
-} ghostty_ipc_action_new_window_s;
-
-typedef union {
-  ghostty_ipc_action_new_window_s new_window;
-} ghostty_ipc_action_u;
-
-// apprt.ipc.Action.Key
-typedef enum {
-  GHOSTTY_IPC_ACTION_NEW_WINDOW,
-  GHOSTTY_IPC_ACTION_NEW_TAB,
-  GHOSTTY_IPC_ACTION_TOGGLE_QUICK_TERMINAL,
-} ghostty_ipc_action_tag_e;
-
 //-------------------------------------------------------------------
 // Published API
 
 GHOSTTY_API int ghostty_init(uintptr_t, char**);
 GHOSTTY_API void ghostty_cli_try_action(void);
 GHOSTTY_API ghostty_info_s ghostty_info(void);
-GHOSTTY_API const char* ghostty_translate(const char*);
 GHOSTTY_API void ghostty_string_free(ghostty_string_s);
 
 GHOSTTY_API ghostty_config_t ghostty_config_new();

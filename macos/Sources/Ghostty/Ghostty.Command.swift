@@ -23,12 +23,7 @@ extension Ghostty {
 
         /// Unsupported action keys, because they either don't make sense in the context of our
         /// target platform or they just aren't implemented yet.
-        static let unsupportedActionKeys: [String] = [
-            "toggle_tab_overview",
-            "toggle_window_decorations",
-            "prompt_window_title",
-            "show_gtk_inspector",
-        ]
+        static let unsupportedActionKeys: [String] = []
 
         init(cValue: ghostty_command_s) {
             self.title = String(cString: cValue.title)

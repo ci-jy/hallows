@@ -4,7 +4,6 @@
 const App = @This();
 
 const std = @import("std");
-const builtin = @import("builtin");
 const assert = @import("quirks.zig").inlineAssert;
 const Allocator = std.mem.Allocator;
 const apprt = @import("apprt.zig");
@@ -293,7 +292,6 @@ fn drainMailbox(self: *App, rt_app: *apprt.App) !void {
                 .{
                     .open_config = switch (v) {
                         .os_open => .os_open,
-                        .new_window => .new_window,
                     },
                 },
             ),
@@ -465,7 +463,6 @@ pub fn performAction(
             .open_config,
             switch (v) {
                 .os_open => .os_open,
-                .new_window => .new_window,
             },
         ),
         .reload_config => _ = try rt_app.performAction(.app, .reload_config, .{}),
@@ -473,7 +470,6 @@ pub fn performAction(
         .toggle_quick_terminal => _ = try rt_app.performAction(.app, .toggle_quick_terminal, {}),
         .toggle_visibility => _ = try rt_app.performAction(.app, .toggle_visibility, {}),
         .check_for_updates => _ = try rt_app.performAction(.app, .check_for_updates, {}),
-        .show_gtk_inspector => _ = try rt_app.performAction(.app, .show_gtk_inspector, {}),
         .undo => _ = try rt_app.performAction(.app, .undo, {}),
 
         .redo => _ = try rt_app.performAction(.app, .redo, {}),
@@ -587,8 +583,6 @@ pub const Message = union(enum) {
     pub const OpenConfig = enum {
         /// Open the config in the OS default editor.
         os_open,
-        /// Open the config in a new window using $EDITOR or $VISUAL
-        new_window,
     };
 };
 
@@ -609,32 +603,4 @@ pub const Mailbox = struct {
 
         return result;
     }
-};
-
-// Wasm API.
-pub const Wasm = if (!builtin.target.isWasm()) struct {} else struct {
-    const wasm = @import("os/wasm.zig");
-    const alloc = wasm.alloc;
-
-    // export fn app_new(config: *Config) ?*App {
-    //     return app_new_(config) catch |err| { log.err("error initializing app err={}", .{err});
-    //         return null;
-    //     };
-    // }
-    //
-    // fn app_new_(config: *Config) !*App {
-    //     const app = try App.create(alloc, config);
-    //     errdefer app.destroy();
-    //
-    //     const result = try alloc.create(App);
-    //     result.* = app;
-    //     return result;
-    // }
-    //
-    // export fn app_free(ptr: ?*App) void {
-    //     if (ptr) |v| {
-    //         v.destroy();
-    //         alloc.destroy(v);
-    //     }
-    // }
 };

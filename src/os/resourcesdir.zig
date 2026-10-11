@@ -59,12 +59,7 @@ pub fn resourcesDir(alloc: Allocator) !ResourcesDir {
 
     // This is the sentinel value we look for in the path to know
     // we've found the resources directory.
-    const sentinels = switch (comptime builtin.target.os.tag) {
-        .windows => .{"terminfo/hallows.terminfo"},
-        .macos => .{"terminfo/78/xterm-hallows"},
-        .freebsd => .{ "site-terminfo/h/hallows", "site-terminfo/x/xterm-hallows" },
-        else => .{ "terminfo/h/hallows", "terminfo/x/xterm-hallows" },
-    };
+    const sentinels = .{"terminfo/78/xterm-hallows"};
 
     // Get the path to our running binary
     var exe_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
@@ -79,28 +74,25 @@ pub fn resourcesDir(alloc: Allocator) !ResourcesDir {
     while (std.fs.path.dirname(exe)) |dir| {
         exe = dir;
 
-        // On MacOS, we look for the app bundle path.
-        if (comptime builtin.target.os.tag.isDarwin()) {
-            inline for (sentinels) |sentinel| {
-                if (try maybeDir(
-                    &dir_buf,
-                    dir,
-                    "Contents/Resources",
-                    sentinel,
-                )) |v| {
-                    return .{ .app_path = try std.fs.path.join(alloc, &.{ v, "hallows" }) };
-                }
-            }
-        }
-
-        // On all platforms (except BSD), we look for a /usr/share style path. This
-        // is valid even on Mac since there is nothing that requires
-        // Ghostty to be in an app bundle.
+        // We look for the app bundle path.
         inline for (sentinels) |sentinel| {
             if (try maybeDir(
                 &dir_buf,
                 dir,
-                if (builtin.target.os.tag == .freebsd) "local/share" else "share",
+                "Contents/Resources",
+                sentinel,
+            )) |v| {
+                return .{ .app_path = try std.fs.path.join(alloc, &.{ v, "hallows" }) };
+            }
+        }
+
+        // We also look for a /usr/share style path since there is
+        // nothing that requires Hallows to be in an app bundle.
+        inline for (sentinels) |sentinel| {
+            if (try maybeDir(
+                &dir_buf,
+                dir,
+                "share",
                 sentinel,
             )) |v| {
                 return .{ .app_path = try std.fs.path.join(alloc, &.{ v, "hallows" }) };

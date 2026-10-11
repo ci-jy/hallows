@@ -63,13 +63,6 @@ pub fn init(gpa: Allocator, environ_map: std.process.Environ.Map) !void {
         return;
     }
 
-    // Not supported on Windows currently, doesn't build.
-    if (comptime builtin.os.tag == .windows) {
-        var map = environ_map;
-        map.deinit();
-        return;
-    }
-
     // Must only start once
     assert(init_thread == null);
 
@@ -109,9 +102,7 @@ fn initThread(gpa: Allocator, environ_map_: std.process.Environ.Map) !void {
     // Right now, on Darwin, `std.Thread.setName` can only name the current
     // thread, and we have no way to get the current thread from within it,
     // so instead we use this code to name the thread instead.
-    if (builtin.os.tag.isDarwin()) {
-        internal_os.macos.pthread_setname_np(&"sentry-init".*);
-    }
+    internal_os.macos.pthread_setname_np(&"sentry-init".*);
 
     // Get our directories.
     var single_threaded: std.Io.Threaded = .init_single_threaded;
@@ -177,19 +168,16 @@ fn initThread(gpa: Allocator, environ_map_: std.process.Environ.Map) !void {
 
     // Setup some basic tags that we always want present
     sentry.setTag("build-mode", build_config.mode_string);
-    sentry.setTag("app-runtime", @tagName(build_config.app_runtime));
     sentry.setTag("font-backend", @tagName(build_config.font_backend));
-    sentry.setTag("renderer", @tagName(build_config.renderer));
 
     // Log some information about sentry
     log.debug("sentry initialized database={s}", .{cache_dir});
 }
 
 fn cacheDir(io: std.Io, alloc: Allocator, environ_map: *const std.process.Environ.Map) ![]const u8 {
-    // On macOS, we prefer to use the NSCachesDirectory value to be
-    // a more idiomatic macOS application. But if XDG env vars are set
-    // we will respect them.
-    if (comptime builtin.os.tag == .macos) macos: {
+    // We prefer to use the NSCachesDirectory value to be a more idiomatic
+    // macOS application. But if XDG env vars are set we will respect them.
+    macos: {
         const xdg_cache_home = environ_map.get("XDG_CACHE_HOME") orelse break :macos;
         if (xdg_cache_home.len > 0) {
             return try internal_os.macos.cacheDir(
@@ -211,8 +199,6 @@ fn cacheDir(io: std.Io, alloc: Allocator, environ_map: *const std.process.Enviro
 /// our data is flushed.
 pub fn deinit() void {
     if (comptime !build_options.sentry) return;
-
-    if (comptime builtin.os.tag == .windows) return;
 
     // If we're still initializing then wait for init to finish. This
     // is highly unlikely since init is a very fast operation but we want

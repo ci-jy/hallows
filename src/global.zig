@@ -4,7 +4,6 @@ const build_config = @import("build_config.zig");
 const build_options = @import("build_options");
 const cli = @import("cli.zig");
 const internal_os = @import("os/main.zig");
-const fontconfig = @import("fontconfig");
 const glslang = @import("glslang");
 const harfbuzz = @import("harfbuzz");
 const oni = @import("oniguruma");
@@ -66,16 +65,7 @@ pub fn init(opts: InitOpts) !void {
         },
         .args = switch (opts) {
             .main, .tool => |m| m.args,
-            // TODO: Using the C API from Windows is unsupported at this time.
-            //
-            // When do we plan on supporting Windows, it's recommended to
-            // ensure that the C API can take a UNICODE_STRING (aka []16, a
-            // WTF-16 string) so that it can just be passed into
-            // std.process.Args.Vector directly.
-            .c => |c| .{ .vector = if (builtin.os.tag == .windows)
-                return error.UnsupportedOSForCApi
-            else
-                c.argv[0..c.argc] },
+            .c => |c| .{ .vector = c.argv[0..c.argc] },
         },
         .tmp_dir_path = null,
         .action = null,
@@ -166,13 +156,9 @@ pub fn init(opts: InitOpts) !void {
     // Output some debug information right away
     std.log.info("hallows version={s}", .{build_config.version_string});
     std.log.info("hallows build optimize={s}", .{build_config.mode_string});
-    std.log.info("runtime={}", .{build_config.app_runtime});
     std.log.info("font_backend={}", .{build_config.font_backend});
     if (comptime build_config.font_backend.hasHarfbuzz()) {
         std.log.info("dependency harfbuzz={s}", .{harfbuzz.versionString()});
-    }
-    if (comptime build_config.font_backend.hasFontconfig()) {
-        std.log.info("dependency fontconfig={d}", .{fontconfig.version()});
     }
     std.log.info("renderer={}", .{renderer.Renderer});
     std.log.info("libxev default backend={t}", .{xev.backend});
@@ -218,11 +204,6 @@ pub fn init(opts: InitOpts) !void {
     // hereafter can use this cached value.
     self.resources_dir = try apprt.runtime.resourcesDir(self.alloc);
     errdefer self.resources_dir.deinit(self.alloc);
-
-    // Setup i18n
-    if (self.resources_dir.app()) |v| internal_os.i18n.init(v) catch |err| {
-        std.log.warn("failed to init i18n, translations will not be available err={}", .{err});
-    };
 }
 
 /// Cleans up the global state. This doesn't _need_ to be called but
@@ -288,8 +269,7 @@ pub fn environMap() !std.process.Environ.Map {
 }
 
 /// Re-synchronizes the global Environ (both the higher-level and I/O versions)
-/// from the process. No-op on Windows, asserts libc and an initialized global
-/// state on everything else.
+/// from the process. Asserts libc and an initialized global state.
 ///
 /// It is not valid to run this within any code that needs to be run through
 /// tests. For any of these, re-factor the code to take an environment map
@@ -305,20 +285,15 @@ pub fn environMap() !std.process.Environ.Map {
 /// `unsetenv` - as a rule, beyond initialization, favor
 /// `std.process.Environ.Map` whenever possible.
 pub fn syncEnviron() void {
-    switch (builtin.os.tag) {
-        .windows => {},
-        else => {
-            assert(builtin.link_libc);
-            assert(!builtin.is_test);
-            const new_environ: std.process.Environ = .{ .block = .{ .slice = std.c.environ[0..env_len: {
-                var len: usize = 0;
-                while (std.c.environ[len]) |_| : (len += 1) {}
-                break :env_len len;
-            } :null] } };
-            state.?.environ = new_environ;
-            state.?.io_impl.environ = .{ .process_environ = new_environ };
-        },
-    }
+    assert(builtin.link_libc);
+    assert(!builtin.is_test);
+    const new_environ: std.process.Environ = .{ .block = .{ .slice = std.c.environ[0..env_len: {
+        var len: usize = 0;
+        while (std.c.environ[len]) |_| : (len += 1) {}
+        break :env_len len;
+    } :null] } };
+    state.?.environ = new_environ;
+    state.?.io_impl.environ = .{ .process_environ = new_environ };
 }
 
 /// Helper to return either the state's args, or one from testing.
@@ -395,10 +370,9 @@ pub const GlobalState = struct {
     pub const Logging = packed struct {
         /// Whether to log to stderr. For lib mode we always disable stderr
         /// logging by default. Otherwise it's enabled by default.
-        stderr: bool = build_config.app_runtime != .none,
-        /// Whether to log to macOS's unified logging. Enabled by default
-        /// on macOS.
-        macos: bool = builtin.os.tag.isDarwin(),
+        stderr: bool = false,
+        /// Whether to log to macOS's unified logging. Enabled by default.
+        macos: bool = true,
     };
 
     /// Asserts that `self.io_impl` has been initialized.
@@ -407,9 +381,6 @@ pub const GlobalState = struct {
     }
 
     fn initSignals() void {
-        // Only posix systems.
-        if (comptime builtin.os.tag == .windows) return;
-
         const p = std.posix;
 
         var sa: p.Sigaction = .{

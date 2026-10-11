@@ -1,9 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-/// Helpers for linking Mach-O artifacts with Apple's native toolchain.
-pub const nativeLink = @import("native_link.zig");
-
 // The cache. This always uses b.allocator and never frees memory
 // (which is idiomatic for a Zig build exe). We cache the libc txt
 // file we create because it is expensive to generate (subprocesses).
@@ -14,16 +11,11 @@ pub const Cache = struct {
         abi: std.Target.Abi,
     };
 
-    pub const Value = union(enum) {
-        native: struct {
-            libc: std.Build.LazyPath,
-            framework: []const u8,
-            system_include: []const u8,
-            library: []const u8,
-        },
-        cross: struct {
-            libc: std.Build.LazyPath,
-        },
+    pub const Value = struct {
+        libc: std.Build.LazyPath,
+        framework: []const u8,
+        system_include: []const u8,
+        library: []const u8,
     };
 
     var map: std.AutoHashMapUnmanaged(Key, ?Value) = .{};
@@ -37,9 +29,7 @@ pub fn build(b: *std.Build) !void {
 }
 
 /// Fetch or load the paths for the proper Apple SDK for libc and
-/// frameworks. When running on a Darwin host, this uses the native
-/// SDK installed on the system via `xcrun`. When cross-compiling from
-/// a non-Darwin host, it falls back to Zig's bundled Darwin headers.
+/// frameworks. This uses the native SDK installed on the system via `xcrun`.
 pub fn pathsForTarget(b: *std.Build, target: std.Target) !Cache.Value {
     const gop = try Cache.map.getOrPut(b.allocator, .{
         .arch = target.cpu.arch,
@@ -108,42 +98,18 @@ pub fn pathsForTarget(b: *std.Build, target: std.Target) !Cache.Value {
                 });
             };
 
-            gop.value_ptr.* = .{ .native = .{
+            gop.value_ptr.* = .{
                 .libc = path,
                 .framework = framework_path,
                 .system_include = libc.sys_include_dir.?,
                 .library = library_path,
-            } };
+            };
 
             break :init;
         }
 
-        // Cross-compiling to Darwin from a non-Darwin host.
-        // Zig only bundles macOS headers, so for other Apple platforms
-        // we leave the value as null to produce a descriptive error.
-        if (target.os.tag != .macos) {
-            gop.value_ptr.* = null;
-            break :init;
-        }
-
-        // Fall back to Zig's bundled Darwin headers for libc resolution.
-        const zig_lib_path = b.graph.zig_lib_directory.path.?;
-        const include_dir = b.pathJoin(&.{
-            zig_lib_path, "libc", "include", "any-darwin-any",
-        });
-
-        const wf = b.addWriteFiles();
-        const path = wf.add("libc.txt", b.fmt(
-            \\include_dir={s}
-            \\sys_include_dir={s}
-            \\crt_dir=
-            \\msvc_lib_dir=
-            \\kernel32_lib_dir=
-            \\gcc_dir=
-            \\
-        , .{ include_dir, include_dir }));
-
-        gop.value_ptr.* = .{ .cross = .{ .libc = path } };
+        // No SDK found.
+        gop.value_ptr.* = null;
     }
 
     return gop.value_ptr.* orelse return switch (target.os.tag) {
@@ -151,17 +117,12 @@ pub fn pathsForTarget(b: *std.Build, target: std.Target) !Cache.Value {
         // generic error but this was confusing a lot of community members.
         // It costs us nothing in the build script to return something better.
         .macos => error.XcodeMacOSSDKNotFound,
-        .ios => error.XcodeiOSSDKNotFound,
-        .tvos => error.XcodeTVOSSDKNotFound,
-        .watchos => error.XcodeWatchOSSDKNotFound,
         else => error.XcodeAppleSDKNotFound,
     };
 }
 
 /// Setup the step to point to the proper Apple SDK for libc and
-/// frameworks. When running on a Darwin host, this uses the native
-/// SDK installed on the system via `xcrun`. When cross-compiling from
-/// a non-Darwin host, it falls back to Zig's bundled Darwin headers.
+/// frameworks. This uses the native SDK installed on the system via `xcrun`.
 pub fn addPaths(
     b: *std.Build,
     step: *std.Build.Step.Compile,
@@ -191,18 +152,12 @@ pub fn addPaths(
         "1",
     );
 
-    switch (try pathsForTarget(b, target)) {
-        .native => |native| {
-            step.setLibCFile(native.libc);
+    const native = try pathsForTarget(b, target);
+    step.setLibCFile(native.libc);
 
-            // This is only necessary until this bug is fixed:
-            // https://github.com/ziglang/zig/issues/24024
-            step.root_module.addSystemFrameworkPath(.{ .cwd_relative = native.framework });
-            step.root_module.addSystemIncludePath(.{ .cwd_relative = native.system_include });
-            step.root_module.addLibraryPath(.{ .cwd_relative = native.library });
-        },
-        .cross => |cross| {
-            step.setLibCFile(cross.libc);
-        },
-    }
+    // This is only necessary until this bug is fixed:
+    // https://github.com/ziglang/zig/issues/24024
+    step.root_module.addSystemFrameworkPath(.{ .cwd_relative = native.framework });
+    step.root_module.addSystemIncludePath(.{ .cwd_relative = native.system_include });
+    step.root_module.addLibraryPath(.{ .cwd_relative = native.library });
 }

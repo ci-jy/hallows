@@ -82,8 +82,8 @@ debug output of Hallows.
 
 In the debug output, you should see in the first 20 lines or so messages about
 loading (or not loading) a configuration file, as well as any errors it may have
-encountered. Configuration errors are also shown in a dedicated window on both
-macOS and Linux (GTK). Hallows does not treat configuration errors as fatal and
+encountered. Configuration errors are also shown in a dedicated window.
+Hallows does not treat configuration errors as fatal and
 will fall back to default values for erroneous keys.
 
 You can also view the full configuration Hallows is loading using `hallows
@@ -97,10 +97,7 @@ Hallows can write logs to a number of destinations. On all platforms, logging to
 logs sent to `stderr` may be stored by the system and made available for later
 retrieval.
 
-On Linux if Hallows is launched by the default `systemd` user service, you can use
-`journald` to see Hallows' logs: `journalctl --user --unit app-com.mitchellh.ghostty.service`.
-
-On macOS logging to the macOS unified log is available and enabled by default.
+Logging to the macOS unified log is available and enabled by default.
 --Use the system `log` CLI to view Hallows' logs: `sudo log stream --level debug
 --predicate 'subsystem=="app.hallows"'`.
 
@@ -114,7 +111,7 @@ to control which destinations receive logs. Hallows currently defines two
 destinations:
 
 - `stderr` - logging to `stderr`.
-- `macos` - logging to macOS's unified log (has no effect on non-macOS platforms).
+- `macos` - logging to macOS's unified log.
 
 Combine values with a comma to enable multiple destinations. Prefix a
 destination with `no-` to disable it. Enabling and disabling destinations

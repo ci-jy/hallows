@@ -1,11 +1,9 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const Action = @import("ghostty.zig").Action;
 const args = @import("args.zig");
 const x11_color = @import("../terminal/main.zig").x11_color;
 const vaxis = @import("vaxis");
-const tui = @import("tui.zig");
 const global = @import("../global.zig");
 
 pub const Options = struct {
@@ -51,7 +49,7 @@ pub fn run(alloc: Allocator) !u8 {
     }.lessThan);
 
     var stdout: std.Io.File = .stdout();
-    if (tui.can_pretty_print and !opts.plain and try stdout.isTty(global.io())) {
+    if (!opts.plain and try stdout.isTty(global.io())) {
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();
         return prettyPrint(arena.allocator(), keys.items);
@@ -90,18 +88,7 @@ fn prettyPrint(alloc: Allocator, keys: [][]const u8) !u8 {
     try tty.writer().writeAll(vaxis.ctlseqs.unicode_set);
     defer tty.writer().writeAll(vaxis.ctlseqs.unicode_reset) catch {};
 
-    const winsize: vaxis.Winsize = switch (builtin.os.tag) {
-        // We use some default, it doesn't really matter for what
-        // we're doing because we don't do any wrapping.
-        .windows => .{
-            .rows = 24,
-            .cols = 120,
-            .x_pixel = 1024,
-            .y_pixel = 768,
-        },
-
-        else => try tty.getWinsize(),
-    };
+    const winsize: vaxis.Winsize = try tty.getWinsize();
     try vx.resize(alloc, tty.writer(), winsize);
 
     const win = vx.window();

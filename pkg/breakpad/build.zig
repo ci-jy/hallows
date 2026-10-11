@@ -56,27 +56,8 @@ pub fn build(b: *std.Build) !void {
                     });
                 },
 
-                .ios => lib.root_module.addCSourceFiles(.{
-                    .root = upstream.path(""),
-                    .files = client_ios,
-                    .flags = flags.items,
-                }),
-
                 else => {},
             }
-        }
-
-        if (target.result.os.tag == .linux) {
-            lib.root_module.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = common_linux,
-                .flags = flags.items,
-            });
-            lib.root_module.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = client_linux,
-                .flags = flags.items,
-            });
         }
 
         lib.installHeadersDirectory(
@@ -95,19 +76,6 @@ const common: []const []const u8 = &.{
     "src/common/string_conversion.cc",
 };
 
-const common_linux: []const []const u8 = &.{
-    "src/common/linux/elf_core_dump.cc",
-    "src/common/linux/elfutils.cc",
-    "src/common/linux/file_id.cc",
-    "src/common/linux/guid_creator.cc",
-    "src/common/linux/linux_libc_support.cc",
-    "src/common/linux/memory_mapped_file.cc",
-    "src/common/linux/safe_readlink.cc",
-    "src/common/linux/scoped_pipe.cc",
-    "src/common/linux/scoped_tmpfile.cc",
-    "src/common/linux/breakpad_getcontext.S",
-};
-
 const common_apple: []const []const u8 = &.{
     "src/common/mac/arch_utilities.cc",
     "src/common/mac/file_id.cc",
@@ -122,23 +90,6 @@ const common_mac: []const []const u8 = &.{
     "src/common/mac/bootstrap_compat.cc",
 };
 
-const client_linux: []const []const u8 = &.{
-    "src/client/minidump_file_writer.cc",
-    "src/client/linux/crash_generation/crash_generation_client.cc",
-    "src/client/linux/crash_generation/crash_generation_server.cc",
-    "src/client/linux/dump_writer_common/thread_info.cc",
-    "src/client/linux/dump_writer_common/ucontext_reader.cc",
-    "src/client/linux/handler/exception_handler.cc",
-    "src/client/linux/handler/minidump_descriptor.cc",
-    "src/client/linux/log/log.cc",
-    "src/client/linux/microdump_writer/microdump_writer.cc",
-    "src/client/linux/minidump_writer/linux_core_dumper.cc",
-    "src/client/linux/minidump_writer/linux_dumper.cc",
-    "src/client/linux/minidump_writer/linux_ptrace_dumper.cc",
-    "src/client/linux/minidump_writer/minidump_writer.cc",
-    "src/client/linux/minidump_writer/pe_file.cc",
-};
-
 const client_apple: []const []const u8 = &.{
     "src/client/minidump_file_writer.cc",
     "src/client/mac/handler/breakpad_nlist_64.cc",
@@ -149,11 +100,4 @@ const client_apple: []const []const u8 = &.{
 const client_mac: []const []const u8 = &.{
     "src/client/mac/handler/exception_handler.cc",
     "src/client/mac/crash_generation/crash_generation_client.cc",
-};
-
-const client_ios: []const []const u8 = &.{
-    "src/client/ios/exception_handler_no_mach.cc",
-    "src/client/ios/handler/ios_exception_minidump_generator.mm",
-    "src/client/mac/crash_generation/ConfigFile.mm",
-    "src/client/mac/handler/protected_memory_allocator.cc",
 };

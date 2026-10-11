@@ -1,23 +1,11 @@
 const std = @import("std");
-const builtin = @import("builtin");
-const internal_os = @import("main.zig");
-const build_config = @import("../build_config.zig");
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
-const posix = std.posix;
-const compat_fd = @import("../lib/compat/fd.zig");
 
 const log = std.log.scoped(.passwd);
 
-// We want to be extra sure since this will force bad symbols into our import table
-comptime {
-    if (builtin.target.cpu.arch.isWasm()) {
-        @compileError("passwd is not available for wasm");
-    }
-}
-
-/// Used to determine the default shell and directory on Unixes.
-const c = if (builtin.os.tag != .windows) @import("posix_c") else {};
+/// Used to determine the default shell and directory.
+const c = @import("posix_c");
 
 // Entry that is retrieved from the passwd API. This only contains the fields
 // we care about.
@@ -29,8 +17,6 @@ pub const Entry = struct {
 
 /// Get the passwd entry for the currently executing user.
 pub fn get(alloc: Allocator) !Entry {
-    if (builtin.os.tag == .windows) @compileError("passwd is not available on windows");
-
     var buf: [1024]u8 = undefined;
     var pw: c.struct_passwd = undefined;
     var pw_ptr: ?*c.struct_passwd = null;
@@ -47,77 +33,6 @@ pub fn get(alloc: Allocator) !Entry {
     }
 
     var result: Entry = .{};
-
-    // If we're in flatpak then our entry is always empty so we grab it
-    // by shelling out to the host. note that we do HAVE an entry in the
-    // sandbox but only the username is correct.
-    if (internal_os.isFlatpak()) flatpak: {
-        if (comptime !build_config.flatpak) {
-            log.warn("flatpak detected, but this build doesn't contain flatpak support", .{});
-            break :flatpak;
-        }
-
-        log.info("flatpak detected, will use host command to get our entry", .{});
-
-        // Note: we wrap our getent call in a /bin/sh login shell because
-        // some operating systems (NixOS tested) don't set the PATH for various
-        // utilities properly until we get a login shell.
-        const Pty = @import("../pty.zig").Pty;
-        var pty = try Pty.open(.{});
-        defer pty.deinit();
-        var cmd: internal_os.FlatpakHostCommand = .{
-            .argv = &[_][]const u8{
-                "/bin/sh",
-                "-l",
-                "-c",
-                try std.fmt.allocPrint(
-                    alloc,
-                    "getent passwd {s}",
-                    .{std.mem.sliceTo(pw.pw_name, 0)},
-                ),
-            },
-            .stdin = pty.slave,
-            .stdout = pty.slave,
-            .stderr = pty.slave,
-        };
-        _ = try cmd.spawn(alloc);
-        _ = try cmd.wait();
-
-        // Once started, we can close the child side. We do this after
-        // wait right now but that is fine too. This lets us read the
-        // parent and detect EOF.
-        _ = compat_fd.close(pty.slave);
-
-        // Read all of our output
-        const output = output: {
-            var output: std.ArrayListUnmanaged(u8) = .empty;
-            while (true) {
-                const n = posix.read(pty.master, &buf) catch |err| {
-                    switch (err) {
-                        // EIO is triggered at the end since we closed our
-                        // child side. This is just EOF for this. I'm not sure
-                        // if I'm doing this wrong.
-                        error.InputOutput => break,
-                        else => return err,
-                    }
-                };
-
-                try output.appendSlice(alloc, buf[0..n]);
-
-                // Max total size is buf.len. We can do better here by trimming
-                // the front and continuing reading but we choose to just exit.
-                if (output.items.len > buf.len) break;
-            }
-
-            break :output try output.toOwnedSlice(alloc);
-        };
-
-        // Shell and home are the last two entries
-        var it = std.mem.splitBackwardsScalar(u8, std.mem.trimEnd(u8, output, " \r\n"), ':');
-        result.shell = if (it.next()) |v| try alloc.dupeZ(u8, v) else null;
-        result.home = if (it.next()) |v| try alloc.dupeZ(u8, v) else null;
-        return result;
-    }
 
     if (pw.pw_shell) |ptr| {
         const source = std.mem.sliceTo(ptr, 0);
@@ -141,7 +56,6 @@ pub fn get(alloc: Allocator) !Entry {
 }
 
 test {
-    if (builtin.os.tag == .windows) return error.SkipZigTest;
     const testing = std.testing;
     var arena = ArenaAllocator.init(testing.allocator);
     defer arena.deinit();

@@ -20,9 +20,6 @@ pub fn build(b: *std.Build) !void {
         .preferred_link_mode = .dynamic,
         .search_strategy = .mode_first,
     };
-    if (target.result.os.tag == .linux) {
-        lib.root_module.linkSystemLibrary("m", dynamic_link_opts);
-    }
     if (target.result.os.tag.isDarwin()) {
         const apple_sdk = @import("apple_sdk");
         try apple_sdk.addPaths(b, lib);
@@ -53,12 +50,6 @@ pub fn build(b: *std.Build) !void {
             "-DPNG_INTEL_SSE_OPT=0",
             "-DPNG_MIPS_MSA_OPT=0",
         });
-        if (target.result.abi == .msvc) {
-            try flags.appendSlice(b.allocator, &.{
-                "-fno-sanitize=undefined",
-                "-fno-sanitize-trap=undefined",
-            });
-        }
 
         lib.root_module.addCSourceFiles(.{
             .root = upstream.path(""),

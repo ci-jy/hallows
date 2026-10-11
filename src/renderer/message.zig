@@ -70,7 +70,7 @@ pub const Message = union(enum) {
     /// Updates the health of the current presentation state.
     ///
     /// If unhealthy, then somehow the apprt failed to present frames from
-    /// the renderer. On GTK, this can be caused by failing to import a DMABUF.
+    /// the renderer.
     presentation_health: renderer.Health,
 
     pub const SearchMatches = struct {

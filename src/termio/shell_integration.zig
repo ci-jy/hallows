@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
 const EnvMap = std.process.Environ.Map;
@@ -147,13 +146,11 @@ fn detectShell(alloc: Allocator, command: config.Command) !?Shell {
         // This means we're unable to perform our automatic shell
         // integration sequence in this specific environment.
         //
-        // If we're running "/bin/bash" on Darwin, we can assume
-        // we're using Apple's Bash because /bin is non-writable
-        // on modern macOS due to System Integrity Protection.
-        if (comptime builtin.target.os.tag.isDarwin()) {
-            if (std.mem.eql(u8, "/bin/bash", arg0)) {
-                return null;
-            }
+        // If we're running "/bin/bash", we can assume we're using
+        // Apple's Bash because /bin is non-writable on modern macOS due
+        // to System Integrity Protection.
+        if (std.mem.eql(u8, "/bin/bash", arg0)) {
+            return null;
         }
         return .bash;
     }
@@ -177,9 +174,7 @@ test detectShell {
     try testing.expectEqual(.nushell, try detectShell(alloc, .{ .shell = "nu" }));
     try testing.expectEqual(.zsh, try detectShell(alloc, .{ .shell = "zsh" }));
 
-    if (comptime builtin.target.os.tag.isDarwin()) {
-        try testing.expect(try detectShell(alloc, .{ .shell = "/bin/bash" }) == null);
-    }
+    try testing.expect(try detectShell(alloc, .{ .shell = "/bin/bash" }) == null);
 
     try testing.expectEqual(.bash, try detectShell(alloc, .{ .shell = "bash -c 'command'" }));
     try testing.expectEqual(.bash, try detectShell(alloc, .{ .shell = "\"/a b/bash\"" }));
@@ -694,8 +689,6 @@ fn prependEnv(
 }
 
 test "xdg: empty XDG_DATA_DIRS" {
-    if (builtin.os.tag == .windows) return error.SkipZigTest;
-
     const testing = std.testing;
 
     var arena = ArenaAllocator.init(testing.allocator);
@@ -722,8 +715,6 @@ test "xdg: empty XDG_DATA_DIRS" {
 }
 
 test "xdg: existing XDG_DATA_DIRS" {
-    if (builtin.os.tag == .windows) return error.SkipZigTest;
-
     const testing = std.testing;
 
     var arena = ArenaAllocator.init(testing.allocator);

@@ -77,16 +77,10 @@ fn buildLib(b: *std.Build, options: anytype) !*std.Build.Step.Compile {
 
         "-fno-sanitize=undefined",
     });
-    if (target.result.os.tag != .windows) {
-        try flags.appendSlice(b.allocator, &.{
-            "-DHAVE_UNISTD_H",
-            "-DHAVE_FCNTL_H",
-        });
-    }
-
-    if (target.result.os.tag == .freebsd or target.result.abi == .musl) {
-        try flags.append(b.allocator, "-fPIC");
-    }
+    try flags.appendSlice(b.allocator, &.{
+        "-DHAVE_UNISTD_H",
+        "-DHAVE_FCNTL_H",
+    });
 
     // For dynamic linking, we prefer dynamic linking and to search by
     // mode first. Mode first will search all paths for a dynamic library
@@ -128,35 +122,14 @@ fn buildLib(b: *std.Build, options: anytype) !*std.Build.Step.Compile {
             .flags = flags.items,
         });
 
-        switch (target.result.os.tag) {
-            .linux => lib.root_module.addCSourceFile(.{
-                .file = upstream.path("builds/unix/ftsystem.c"),
-                .flags = flags.items,
-            }),
-            .windows => lib.root_module.addCSourceFile(.{
-                .file = upstream.path("builds/windows/ftsystem.c"),
-                .flags = flags.items,
-            }),
-            else => lib.root_module.addCSourceFile(.{
-                .file = upstream.path("src/base/ftsystem.c"),
-                .flags = flags.items,
-            }),
-        }
-        switch (target.result.os.tag) {
-            .windows => {
-                lib.root_module.addCSourceFile(.{
-                    .file = upstream.path("builds/windows/ftdebug.c"),
-                    .flags = flags.items,
-                });
-                lib.root_module.addWin32ResourceFile(.{
-                    .file = upstream.path("src/base/ftver.rc"),
-                });
-            },
-            else => lib.root_module.addCSourceFile(.{
-                .file = upstream.path("src/base/ftdebug.c"),
-                .flags = flags.items,
-            }),
-        }
+        lib.root_module.addCSourceFile(.{
+            .file = upstream.path("src/base/ftsystem.c"),
+            .flags = flags.items,
+        });
+        lib.root_module.addCSourceFile(.{
+            .file = upstream.path("src/base/ftdebug.c"),
+            .flags = flags.items,
+        });
 
         lib.installHeader(b.path("freetype-zig.h"), "freetype-zig.h");
         lib.installHeadersDirectory(

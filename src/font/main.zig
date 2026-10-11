@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const build_config = @import("../build_config.zig");
 
 const library = @import("library.zig");
@@ -30,24 +29,11 @@ pub const Descriptor = discovery.Descriptor;
 pub const Discover = discovery.Discover;
 pub const Library = library.Library;
 
-// If we're targeting wasm then we export some wasm APIs.
-comptime {
-    if (builtin.target.cpu.arch.isWasm()) {
-        _ = Atlas.Wasm;
-        _ = DeferredFace.Wasm;
-        _ = face.web_canvas.Wasm;
-        _ = shape.web_canvas.Wasm;
-    }
-}
-
 /// Build options
 pub const options: struct {
     backend: Backend,
 } = .{
-    // TODO: we need to modify the build config for wasm builds. the issue
-    // is we're sharing the build config options between all exes in build.zig.
-    // We need to construct it per target.
-    .backend = if (builtin.target.cpu.arch.isWasm()) .web_canvas else build_config.font_backend,
+    .backend = build_config.font_backend,
 };
 
 /// The styles that a family can take.
@@ -73,11 +59,5 @@ pub const sprite_index = Collection.Index.initSpecial(.sprite);
 pub const default_fallback_adjustment: Collection.SizeAdjustment = .ic_width;
 
 test {
-    // For non-wasm we want to test everything we can
-    if (!comptime builtin.target.cpu.arch.isWasm()) {
-        @import("std").testing.refAllDecls(@This());
-        return;
-    }
-
-    _ = Atlas;
+    @import("std").testing.refAllDecls(@This());
 }

@@ -2,21 +2,14 @@
 //! taking the internal screen state and turning into some output format,
 //! usually for a screen.
 //!
-//! The renderer is closely tied to the windowing system which usually
-//! has to prepare the window for the given renderer using system-specific
-//! APIs. The renderers in this package assume that the renderer is already
-//! setup (OpenGL has a context, Vulkan has a surface, etc.)
-
-const build_config = @import("build_config.zig");
+//! Hallows renders with Metal.
 
 const cursor = @import("renderer/cursor.zig");
 const message = @import("renderer/message.zig");
 const size = @import("renderer/size.zig");
 pub const shadertoy = @import("renderer/shadertoy.zig");
-pub const Backend = @import("renderer/backend.zig").Backend;
 pub const GenericRenderer = @import("renderer/generic.zig").Renderer;
 pub const Metal = @import("renderer/Metal.zig");
-pub const OpenGL = @import("renderer/OpenGL.zig");
 pub const Options = @import("renderer/Options.zig");
 pub const Overlay = @import("renderer/Overlay.zig");
 pub const Thread = @import("renderer/Thread.zig");
@@ -34,15 +27,10 @@ pub const lib = @import("lib/main.zig");
 
 /// The implementation to use for the renderer. This is comptime chosen
 /// so that every build has exactly one renderer implementation.
-pub const Renderer = GenericRenderer(GraphicsAPI);
-
-const GraphicsAPI = switch (build_config.renderer) {
-    .metal => Metal,
-    .opengl => OpenGL,
-};
+pub const Renderer = GenericRenderer(Metal);
 
 /// The app-scoped render device from which surface renderers are created.
-pub const Device = GraphicsAPI.Device;
+pub const Device = Metal.Device;
 
 /// The health status of a renderer. These must be shared across all
 /// renderers even if some states aren't reachable so that our API users

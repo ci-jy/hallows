@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const args = @import("args.zig");
 const Action = @import("ghostty.zig").Action;
 const Arena = std.heap.ArenaAllocator;
@@ -8,7 +7,6 @@ const configpkg = @import("../config.zig");
 const Config = configpkg.Config;
 const vaxis = @import("vaxis");
 const input = @import("../input.zig");
-const tui = @import("tui.zig");
 const Binding = input.Binding;
 const global = @import("../global.zig");
 
@@ -70,7 +68,7 @@ pub fn run(alloc: Allocator) !u8 {
     var stdout_writer = stdout.writer(global.io(), &buffer);
     const writer = &stdout_writer.interface;
 
-    if (tui.can_pretty_print and !opts.plain and try stdout.isTty(global.io())) {
+    if (!opts.plain and try stdout.isTty(global.io())) {
         var arena = std.heap.ArenaAllocator.init(alloc);
         defer arena.deinit();
         return prettyPrint(arena.allocator(), config.keybind);
@@ -236,18 +234,7 @@ fn prettyPrint(alloc: Allocator, keybinds: Config.Keybinds) !u8 {
     try writer.writeAll(vaxis.ctlseqs.unicode_set);
     defer writer.writeAll(vaxis.ctlseqs.unicode_reset) catch {};
 
-    const winsize: vaxis.Winsize = switch (builtin.os.tag) {
-        // We use some default, it doesn't really matter for what
-        // we're doing because we don't do any wrapping.
-        .windows => .{
-            .rows = 24,
-            .cols = 120,
-            .x_pixel = 1024,
-            .y_pixel = 768,
-        },
-
-        else => try tty.getWinsize(),
-    };
+    const winsize: vaxis.Winsize = try tty.getWinsize();
     try vx.resize(alloc, writer, winsize);
 
     const win = vx.window();

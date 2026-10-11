@@ -89,9 +89,6 @@ pub const options = @import("terminal_options");
 /// Whether this target supports terminal page compression.
 pub const compression_enabled = @import("mem.zig").canReclaim(.strict);
 
-/// This is set to true when we're building the C library.
-pub const c_api = if (options.c_abi) @import("c/main.zig") else void;
-
 test {
     @import("std").testing.refAllDecls(@This());
 

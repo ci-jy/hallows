@@ -2,7 +2,6 @@
 //! (https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html)
 
 const std = @import("std");
-const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const posix = std.posix;
 const homedir = @import("homedir.zig");
@@ -22,7 +21,6 @@ pub const Options = struct {
 pub fn config(io: std.Io, alloc: Allocator, environ_map: *const std.process.Environ.Map, opts: Options) ![]u8 {
     return try dir(io, alloc, environ_map, opts, .{
         .env = "XDG_CONFIG_HOME",
-        .windows_env = "LOCALAPPDATA",
         .default_subdir = ".config",
     });
 }
@@ -31,7 +29,6 @@ pub fn config(io: std.Io, alloc: Allocator, environ_map: *const std.process.Envi
 pub fn cache(io: std.Io, alloc: Allocator, environ_map: *const std.process.Environ.Map, opts: Options) ![]u8 {
     return try dir(io, alloc, environ_map, opts, .{
         .env = "XDG_CACHE_HOME",
-        .windows_env = "LOCALAPPDATA",
         .default_subdir = ".cache",
     });
 }
@@ -40,14 +37,12 @@ pub fn cache(io: std.Io, alloc: Allocator, environ_map: *const std.process.Envir
 pub fn state(io: std.Io, alloc: Allocator, environ_map: *const std.process.Environ.Map, opts: Options) ![]u8 {
     return try dir(io, alloc, environ_map, opts, .{
         .env = "XDG_STATE_HOME",
-        .windows_env = "LOCALAPPDATA",
         .default_subdir = ".local/state",
     });
 }
 
 const InternalOptions = struct {
     env: []const u8,
-    windows_env: []const u8,
     default_subdir: []const u8,
 };
 
@@ -68,12 +63,8 @@ fn dir(
         });
     }
 
-    // First check the env var. On Windows we treat `LOCALAPPDATA` as a
-    // fallback for `XDG_CONFIG_HOME`
-    const env = switch (builtin.os.tag) {
-        .windows => environ_map.get(internal_opts.env) orelse environ_map.get(internal_opts.windows_env) orelse "",
-        else => environ_map.get(internal_opts.env) orelse "",
-    };
+    // First check the env var.
+    const env = environ_map.get(internal_opts.env) orelse "";
 
     if (env.len > 0) {
         // If we have a subdir, then we use the env as-is to avoid a copy.
@@ -135,7 +126,7 @@ test "cache directory paths" {
     const testing = std.testing;
     const io = testing.io;
     const alloc = testing.allocator;
-    const mock_home = if (builtin.os.tag == .windows) "C:\\Users\\test" else "/Users/test";
+    const mock_home = "/Users/test";
     var environ_map = try testing.environ.createMap(alloc);
     defer environ_map.deinit();
 
@@ -165,8 +156,6 @@ test "cache directory paths" {
 }
 
 test "fallback when xdg env empty" {
-    if (builtin.os.tag == .windows) return error.SkipZigTest;
-
     const io = std.testing.io;
     const alloc = std.testing.allocator;
 
@@ -204,8 +193,6 @@ test "fallback when xdg env empty" {
 }
 
 test "fallback when xdg env empty and subdir" {
-    if (builtin.os.tag == .windows) return error.SkipZigTest;
-
     const io = std.testing.io;
     const alloc = std.testing.allocator;
 

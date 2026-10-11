@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const assert = @import("../quirks.zig").inlineAssert;
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
@@ -102,7 +101,7 @@ pub const Path = union(enum) {
                 "?{s}",
                 .{path},
             ) catch |err| switch (err) {
-                // Required for builds on Linux where NoSpaceLeft
+                // Required because NoSpaceLeft
                 // isn't an allowed error for fmt.
                 error.NoSpaceLeft => return error.OutOfMemory,
             },
@@ -158,12 +157,9 @@ pub const Path = union(enum) {
         var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
 
         // Check if the path starts with a tilde and expand it to the
-        // home directory on Linux/macOS. We explicitly look for "~/"
+        // home directory. We explicitly look for "~/"
         // because we don't support alternate users such as "~alice/"
-        if (std.mem.startsWith(u8, path, "~/")) expand: {
-            // Windows isn't supported yet
-            if (comptime builtin.os.tag == .windows) break :expand;
-
+        if (std.mem.startsWith(u8, path, "~/")) {
             var environ_map = try global.environMap();
             defer environ_map.deinit();
 
@@ -422,7 +418,7 @@ pub const RepeatablePath = struct {
                     "?{s}",
                     .{path},
                 ) catch |err| switch (err) {
-                    // Required for builds on Linux where NoSpaceLeft
+                    // Required because NoSpaceLeft
                     // isn't an allowed error for fmt.
                     error.NoSpaceLeft => return error.OutOfMemory,
                 },

@@ -5,9 +5,7 @@
 //! Swift+XCode-based application.
 
 const std = @import("std");
-const builtin = @import("builtin");
 const assert = @import("../quirks.zig").inlineAssert;
-const Allocator = std.mem.Allocator;
 const objc = @import("objc");
 const apprt = @import("../apprt.zig");
 const font = @import("../font/main.zig");
@@ -241,9 +239,6 @@ pub const App = struct {
     /// "kind of expensive" I mean that its not something you probably want
     /// to run on every keypress.
     pub fn keyboardLayout(self: *App) input.KeyboardLayout {
-        // We only support keyboard layout detection on macOS.
-        if (comptime builtin.os.tag != .macos) return .unknown;
-
         // Lazily initialize the keymap.
         const keymap: *input.Keymap = keymap: {
             if (self.keymap == null) {
@@ -357,43 +352,16 @@ pub const App = struct {
             else => {},
         }
     }
-
-    /// Send the given IPC to a running Ghostty. Returns `true` if the action was
-    /// able to be performed, `false` otherwise.
-    ///
-    /// Note that this is a static function. Since this is called from a CLI app (or
-    /// some other process that is not Ghostty) there is no full-featured apprt App
-    /// to use.
-    pub fn performIpc(
-        _: Allocator,
-        _: apprt.ipc.Target,
-        comptime action: apprt.ipc.Action.Key,
-        _: apprt.ipc.Action.Value(action),
-    ) (Allocator.Error || apprt.ipc.Errors)!bool {
-        switch (action) {
-            .new_window => return false,
-            .new_tab => return false,
-            .toggle_quick_terminal => return false,
-        }
-    }
 };
 
 /// Platform-specific configuration for libghostty.
 pub const Platform = union(PlatformTag) {
     macos: MacOS,
-    ios: IOS,
 
-    // If our build target for libghostty is not darwin then we do
-    // not include macos support at all.
-    pub const MacOS = if (builtin.target.os.tag.isDarwin()) struct {
+    pub const MacOS = struct {
         /// The view to render the surface on.
         nsview: objc.Object,
-    } else void;
-
-    pub const IOS = if (builtin.target.os.tag.isDarwin()) struct {
-        /// The view to render the surface on.
-        uiview: objc.Object,
-    } else void;
+    };
 
     // The C ABI compatible version of this union. The tag is expected
     // to be stored elsewhere.
@@ -401,29 +369,18 @@ pub const Platform = union(PlatformTag) {
         macos: extern struct {
             nsview: ?*anyopaque,
         },
-
-        ios: extern struct {
-            uiview: ?*anyopaque,
-        },
     };
 
     /// Initialize a Platform a tag and configuration from the C ABI.
     pub fn init(tag_int: c_int, c_platform: C) !Platform {
         const tag = std.enums.fromInt(PlatformTag, tag_int) orelse return error.InvalidEnumTag;
         return switch (tag) {
-            .macos => if (MacOS != void) macos: {
+            .macos => macos: {
                 const config = c_platform.macos;
                 const nsview = objc.Object.fromId(config.nsview orelse
                     break :macos error.NSViewMustBeSet);
                 break :macos .{ .macos = .{ .nsview = nsview } };
-            } else error.UnsupportedPlatform,
-
-            .ios => if (IOS != void) ios: {
-                const config = c_platform.ios;
-                const uiview = objc.Object.fromId(config.uiview orelse
-                    break :ios error.UIViewMustBeSet);
-                break :ios .{ .ios = .{ .uiview = uiview } };
-            } else error.UnsupportedPlatform,
+            },
         };
     }
 };
@@ -433,7 +390,6 @@ pub const PlatformTag = enum(c_int) {
     // from the C API.
 
     macos = 1,
-    ios = 2,
 };
 
 pub const EnvVar = extern struct {
@@ -1183,28 +1139,26 @@ pub const Surface = struct {
         var env = try global.environMap();
         errdefer env.deinit();
 
-        if (comptime builtin.target.os.tag.isDarwin()) {
-            if (env.get("__XCODE_BUILT_PRODUCTS_DIR_PATHS") != null) {
-                _ = env.orderedRemove("__XCODE_BUILT_PRODUCTS_DIR_PATHS");
-                _ = env.orderedRemove("__XPC_DYLD_LIBRARY_PATH");
-                _ = env.orderedRemove("DYLD_FRAMEWORK_PATH");
-                _ = env.orderedRemove("DYLD_INSERT_LIBRARIES");
-                _ = env.orderedRemove("DYLD_LIBRARY_PATH");
-                _ = env.orderedRemove("LD_LIBRARY_PATH");
-                _ = env.orderedRemove("SECURITYSESSIONID");
-                _ = env.orderedRemove("XPC_SERVICE_NAME");
-            }
-
-            // Remove this so that running `ghostty` within Ghostty works.
-            _ = env.orderedRemove("HALLOWS_MAC_LAUNCH_SOURCE");
-
-            // If we were launched from the desktop then we want to
-            // remove the LANGUAGE env var so that we don't inherit
-            // our translation settings for Ghostty. If we aren't from
-            // the desktop then we didn't set our LANGUAGE var so we
-            // don't need to remove it.
-            if (internal_os.launchedFromDesktop()) _ = env.orderedRemove("LANGUAGE");
+        if (env.get("__XCODE_BUILT_PRODUCTS_DIR_PATHS") != null) {
+            _ = env.orderedRemove("__XCODE_BUILT_PRODUCTS_DIR_PATHS");
+            _ = env.orderedRemove("__XPC_DYLD_LIBRARY_PATH");
+            _ = env.orderedRemove("DYLD_FRAMEWORK_PATH");
+            _ = env.orderedRemove("DYLD_INSERT_LIBRARIES");
+            _ = env.orderedRemove("DYLD_LIBRARY_PATH");
+            _ = env.orderedRemove("LD_LIBRARY_PATH");
+            _ = env.orderedRemove("SECURITYSESSIONID");
+            _ = env.orderedRemove("XPC_SERVICE_NAME");
         }
+
+        // Remove this so that running `ghostty` within Ghostty works.
+        _ = env.orderedRemove("HALLOWS_MAC_LAUNCH_SOURCE");
+
+        // If we were launched from the desktop then we want to
+        // remove the LANGUAGE env var so that we don't inherit
+        // our translation settings for Ghostty. If we aren't from
+        // the desktop then we didn't set our LANGUAGE var so we
+        // don't need to remove it.
+        if (internal_os.launchedFromDesktop()) _ = env.orderedRemove("LANGUAGE");
 
         return env;
     }
@@ -1235,7 +1189,7 @@ pub const Inspector = struct {
 
         pub fn deinit(self: Backend) void {
             switch (self) {
-                .metal => if (builtin.target.os.tag.isDarwin()) cimgui.ImGui_ImplMetal_Shutdown(),
+                .metal => cimgui.ImGui_ImplMetal_Shutdown(),
             }
         }
     };
@@ -1652,12 +1606,9 @@ pub const CAPI = struct {
         }
     };
 
-    // Reference the conditional exports based on target platform
-    // so they're included in the C API.
+    // Reference the Darwin exports so they're included in the C API.
     comptime {
-        if (builtin.target.os.tag.isDarwin()) {
-            _ = Darwin;
-        }
+        _ = Darwin;
     }
 
     /// Create a new app.
@@ -1755,7 +1706,7 @@ pub const CAPI = struct {
 
     /// Open the configuration.
     export fn ghostty_app_open_config(v: *App) void {
-        _ = v.performAction(.app, .open_config, .new_window) catch |err| {
+        _ = v.performAction(.app, .open_config, .os_open) catch |err| {
             log.err("error reloading config err={}", .{err});
             return;
         };
@@ -2177,8 +2128,7 @@ pub const CAPI = struct {
     /// Request that the surface split in the given direction.
     export fn ghostty_surface_split(ptr: *Surface, direction: apprt.action.SplitDirection) void {
         // Menu shortcuts call this C API directly. Route through
-        // performBindingAction so menus and keybinds share one path,
-        // matching GTK.
+        // performBindingAction so menus and keybinds share one path.
         const action: input.Binding.Action = .{
             .new_split = switch (direction) {
                 .right => .right,
@@ -2383,9 +2333,6 @@ pub const CAPI = struct {
         app: *App,
         window: *anyopaque,
     ) void {
-        // This is only supported on macOS
-        if (comptime builtin.target.os.tag != .macos) return;
-
         const config = &app.config;
 
         // Do nothing if we don't have background transparency enabled

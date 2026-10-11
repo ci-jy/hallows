@@ -53,12 +53,7 @@ fn buildGlslang(
             .target = target,
             .optimize = optimize,
             .link_libc = true,
-            // On MSVC, we must not use linkLibCpp because Zig unconditionally
-            // passes -nostdinc++ and then adds its bundled libc++/libc++abi
-            // include paths, which conflict with MSVC's own C++ runtime
-            // headers. The MSVC SDK include directories (added via linkLibC)
-            // contain both C and C++ headers, so linkLibCpp is not needed.
-            .link_libcpp = target.result.abi != .msvc,
+            .link_libcpp = true,
         }),
         .linkage = .static,
     });
@@ -79,10 +74,6 @@ fn buildGlslang(
     // like std::variant, std::filesystem, and inline variables are
     // guarded behind _HAS_CXX17.
     try flags.append(b.allocator, "-std=c++17");
-
-    if (target.result.os.tag == .freebsd or target.result.abi == .musl) {
-        try flags.append(b.allocator, "-fPIC");
-    }
 
     if (upstream_) |upstream| {
         lib.root_module.addCSourceFiles(.{
@@ -143,23 +134,13 @@ fn buildGlslang(
             },
         });
 
-        if (target.result.os.tag != .windows) {
-            lib.root_module.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .flags = flags.items,
-                .files = &.{
-                    "glslang/OSDependent/Unix/ossource.cpp",
-                },
-            });
-        } else {
-            lib.root_module.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .flags = flags.items,
-                .files = &.{
-                    "glslang/OSDependent/Windows/ossource.cpp",
-                },
-            });
-        }
+        lib.root_module.addCSourceFiles(.{
+            .root = upstream.path(""),
+            .flags = flags.items,
+            .files = &.{
+                "glslang/OSDependent/Unix/ossource.cpp",
+            },
+        });
 
         lib.installHeadersDirectory(
             upstream.path(""),

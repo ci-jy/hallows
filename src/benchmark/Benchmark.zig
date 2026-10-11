@@ -2,7 +2,6 @@
 const Benchmark = @This();
 
 const std = @import("std");
-const builtin = @import("builtin");
 const assert = std.debug.assert;
 const macos = @import("macos");
 const build_config = @import("../build_config.zig");
@@ -39,31 +38,17 @@ pub fn run(
     // Our result accumulator. This will be returned at the end of the run.
     var result: RunResult = .{};
 
-    // If we're on macOS, we setup signposts so its easier to find
-    // the results in Instruments. There's a lot of nasty comptime stuff
-    // here but its just to ensure this does nothing on other platforms.
+    // We setup signposts so its easier to find the results in Instruments.
     const signpost_name = "ghostty";
-    const signpost: if (builtin.target.os.tag.isDarwin()) struct {
-        log: *macos.os.Log,
-        id: macos.os.signpost.Id,
-    } else void = if (builtin.target.os.tag.isDarwin()) darwin: {
-        macos.os.signpost.init();
-        const log = macos.os.Log.create(
-            build_config.bundle_id,
-            macos.os.signpost.Category.points_of_interest,
-        );
-        const id = macos.os.signpost.Id.forPointer(log, self.ptr);
-        macos.os.signpost.intervalBegin(log, id, signpost_name);
-        break :darwin .{ .log = log, .id = id };
-    } else {};
-    defer if (comptime builtin.target.os.tag.isDarwin()) {
-        macos.os.signpost.intervalEnd(
-            signpost.log,
-            signpost.id,
-            signpost_name,
-        );
-        signpost.log.release();
-    };
+    macos.os.signpost.init();
+    const signpost_log = macos.os.Log.create(
+        build_config.bundle_id,
+        macos.os.signpost.Category.points_of_interest,
+    );
+    defer signpost_log.release();
+    const signpost_id = macos.os.signpost.Id.forPointer(signpost_log, self.ptr);
+    macos.os.signpost.intervalBegin(signpost_log, signpost_id, signpost_name);
+    defer macos.os.signpost.intervalEnd(signpost_log, signpost_id, signpost_name);
 
     const start: std.Io.Timestamp = .now(global.io(), .awake);
     while (true) {
@@ -134,18 +119,6 @@ pub const VTable = struct {
 };
 
 test Benchmark {
-    // This test fails on FreeBSD and Windows so skip:
-    //
-    // /home/runner/work/ghostty/ghostty/src/benchmark/Benchmark.zig:165:5: 0x3cd2de1 in decltest.Benchmark (ghostty-test)
-    //     try testing.expect(result.duration > 0);
-    //     ^
-    switch (builtin.os.tag) {
-        .freebsd,
-        .windows,
-        => return error.SkipZigTest,
-        else => {},
-    }
-
     const testing = std.testing;
     const Simple = struct {
         const Self = @This();

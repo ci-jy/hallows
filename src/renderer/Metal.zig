@@ -4,7 +4,6 @@ pub const Metal = @This();
 const std = @import("std");
 const assert = @import("../quirks.zig").inlineAssert;
 const Allocator = std.mem.Allocator;
-const builtin = @import("builtin");
 const objc = @import("objc");
 const macos = @import("macos");
 const graphics = macos.graphics;
@@ -58,11 +57,6 @@ pub fn init(
     device: *const Device,
     opts: rendererpkg.Options,
 ) !Metal {
-    comptime switch (builtin.os.tag) {
-        .macos, .ios => {},
-        else => @compileError("unsupported platform for Metal"),
-    };
-
     _ = alloc;
 
     // Create a MTLCommandQueue for our app-scoped MTLDevice.
@@ -79,10 +73,7 @@ pub fn init(
     const info: ViewInfo = switch (apprt.runtime) {
         apprt.embedded => .{
             .scaleFactor = @floatCast(opts.rt_surface.content_scale.x),
-            .view = switch (opts.rt_surface.platform) {
-                .macos => |v| v.nsview,
-                .ios => |v| v.uiview,
-            },
+            .view = opts.rt_surface.platform.macos.nsview,
         },
 
         else => @compileError("unsupported apprt for metal"),
@@ -94,27 +85,11 @@ pub fn init(
     var layer = try IOSurfaceLayer.init();
     errdefer layer.release();
 
-    // Add our layer to the view.
-    //
-    // On macOS we do this by making the view "layer-hosting"
-    // by assigning it to the view's `layer` property BEFORE
-    // setting `wantsLayer` to `true`.
-    //
-    // On iOS, views are always layer-backed, and `layer`
-    // is readonly, so instead we add it as a sublayer.
-    switch (comptime builtin.os.tag) {
-        .macos => {
-            info.view.setProperty("layer", layer.layer.value);
-            info.view.setProperty("wantsLayer", true);
-        },
-
-        .ios => {
-            const view_layer = objc.Object.fromId(info.view.getProperty(?*anyopaque, "layer"));
-            view_layer.msgSend(void, objc.sel("addSublayer:"), .{layer.layer.value});
-        },
-
-        else => @compileError("unsupported target for Metal"),
-    }
+    // Add our layer to the view. We do this by making the view
+    // "layer-hosting" by assigning it to the view's `layer` property
+    // BEFORE setting `wantsLayer` to `true`.
+    info.view.setProperty("layer", layer.layer.value);
+    info.view.setProperty("wantsLayer", true);
 
     // Ensure that if our layer is oversized it
     // does not overflow the bounds of the view.

@@ -16,7 +16,6 @@ pub const LimitedAllocator = @import("limited_allocator.zig").LimitedAllocator;
 pub const MessageData = @import("message_data.zig").MessageData;
 pub const SplitTree = split_tree.SplitTree;
 pub const UntouchedPool = @import("untouched_pool.zig").UntouchedPool;
-pub const WasmPagePool = @import("wasm_page_pool.zig").WasmPagePool;
 
 test {
     @import("std").testing.refAllDecls(@This());

@@ -452,12 +452,8 @@ pub const Map = std.HashMapUnmanaged(
 );
 
 /// Initialize once and return the font discovery mechanism. This remains
-/// initialized throughout the lifetime of the application because some
-/// font discovery mechanisms (i.e. fontconfig) are unsafe to reinit.
+/// initialized throughout the lifetime of the application.
 fn discover(self: *SharedGridSet) !?*Discover {
-    // If we're built without a font discovery mechanism, return null
-    if (comptime Discover == void) return null;
-
     // If we initialized, use it
     if (self.font_discover) |*v| return v;
 

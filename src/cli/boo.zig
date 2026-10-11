@@ -1,5 +1,4 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const args = @import("args.zig");
 const Action = @import("ghostty.zig").Action;
 const Allocator = std.mem.Allocator;
@@ -176,12 +175,6 @@ const Boo = struct {
 pub fn run(gpa: Allocator) !u8 {
     var env_map = try global.environMap();
     defer env_map.deinit();
-
-    // Disable on non-desktop systems.
-    switch (builtin.os.tag) {
-        .windows, .macos, .linux, .freebsd => {},
-        else => return 1,
-    }
 
     var opts: Options = .{};
     defer opts.deinit();

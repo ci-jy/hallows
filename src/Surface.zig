@@ -16,7 +16,6 @@ pub const Mailbox = apprt.surface.Mailbox;
 pub const Message = apprt.surface.Message;
 
 const std = @import("std");
-const builtin = @import("builtin");
 const assert = @import("quirks.zig").inlineAssert;
 const Allocator = std.mem.Allocator;
 const ArenaAllocator = std.heap.ArenaAllocator;
@@ -770,26 +769,6 @@ pub fn init(
             .set_title,
             .{ .title = title },
         );
-    } else if ((comptime builtin.os.tag == .linux) and
-        config.@"_xdg-terminal-exec")
-    xdg: {
-        // For xdg-terminal-exec execution we special-case and set the window
-        // title to the command being executed. This allows window managers
-        // to set custom styling based on the command being executed.
-        const v = command orelse break :xdg;
-        const title = v.string(alloc) catch |err| {
-            log.warn(
-                "error copying command for title, title will not be set err={}",
-                .{err},
-            );
-            break :xdg;
-        };
-        defer alloc.free(title);
-        _ = try rt_app.performAction(
-            .{ .surface = self },
-            .set_title,
-            .{ .title = title },
-        );
     } else if (command) |cmd| switch (cmd) {
         // If a user specifies a command it is appropriate to set the title as argv[0]
         // we know in the case of a direct command it has been supplied by the user
@@ -1287,14 +1266,10 @@ fn childExited(self: *Surface, info: apprt.surface.Message.ChildExited) void {
 
     // If our runtime was below some threshold then we assume that this
     // was an abnormal exit and we show an error message.
-    if (info.runtime_ms <= self.config.abnormal_command_exit_runtime_ms) runtime: {
-        // On macOS, our exit code detection doesn't work, possibly
-        // because of our `login` wrapper. More investigation required.
-        if (comptime !builtin.target.os.tag.isDarwin()) {
-            // If the exit code is 0 then it was a good exit.
-            if (info.exit_code == 0) break :runtime;
-        }
-
+    //
+    // We don't check the exit code: our exit code detection doesn't work,
+    // possibly because of our `login` wrapper. More investigation required.
+    if (info.runtime_ms <= self.config.abnormal_command_exit_runtime_ms) {
         log.warn("abnormal process exit detected, showing error message", .{});
 
         // Try and show a GUI message. If it returns true, don't do anything else.
@@ -1419,17 +1394,8 @@ fn childExitedAbnormally(
     try t.printString(runtime_str);
     try t.setAttribute(.{ .unset = {} });
 
-    // We don't print this on macOS because the exit code is always 0
-    // due to the way we launch the process.
-    if (comptime !builtin.target.os.tag.isDarwin()) {
-        const exit_code_str = try std.fmt.allocPrint(alloc, "{d}", .{info.exit_code});
-        t.carriageReturn();
-        try t.linefeed();
-        try t.printString("Exit Code: ");
-        try t.setAttribute(.{ .@"8_fg" = .red });
-        try t.printString(exit_code_str);
-        try t.setAttribute(.{ .unset = {} });
-    }
+    // We don't print the exit code because it is always 0 due to the
+    // way we launch the process.
 
     t.carriageReturn();
     try t.linefeed();
@@ -2565,25 +2531,6 @@ fn queueRender(self: *Surface) !void {
     try self.renderer_thread.wakeup.notify();
 }
 
-/// Called by the apprt when the surface's display is realized.
-/// Notifies the renderer so it can begin rendering.
-/// Safe to call from the main thread.
-pub fn displayRealized(self: *Surface) !void {
-    try self.renderer.displayRealized();
-}
-
-/// Called by the apprt when the surface's display is unrealized (the surface
-/// is being destroyed or reparented). Safe to call from the main thread.
-pub fn displayUnrealized(self: *Surface) void {
-    self.renderer.displayUnrealized();
-
-    // Wake the render thread so it notices `display_realized` is now false
-    // and releases GPU resources (swap chain and shaders).
-    self.renderer_thread.wakeup.notify() catch |err| {
-        log.warn("failed to notify renderer thread of unrealize err={}", .{err});
-    };
-}
-
 pub fn sizeCallback(self: *Surface, size: apprt.SurfaceSize) !void {
     // Crash metadata in case we crash in here
     crash.sentry.thread_state = self.crashThreadState();
@@ -3398,8 +3345,6 @@ fn encodeKeyOpts(self: *const Surface) input.key_encode.Options {
     const t = &self.io.terminal;
 
     var opts: input.key_encode.Options = .fromTerminal(t);
-    if (comptime builtin.os.tag != .macos) return opts;
-
     opts.macos_option_as_alt = self.config.macos_option_as_alt orelse detect: {
         // If we don't have alt pressed, it doesn't matter what this
         // config is so we can just say "false" and break out and avoid
@@ -3604,23 +3549,19 @@ pub fn scrollCallback(
         const yoff_adjusted: f64 = if (scroll_mods.precision)
             yoff * self.config.mouse_scroll_multiplier.precision
         else yoff_adjusted: {
-            if (comptime builtin.target.os.tag.isDarwin()) {
-                // Round out the yoff to an absolute minimum of 1. macos tries to
-                // simulate precision scrolling with non precision events by
-                // ramping up the magnitude of the offsets as it detects faster
-                // scrolling. Single click (very slow) scrolls are reported with a
-                // magnitude of 0.1 which would normally require a few clicks
-                // before we register an actual scroll event (depending on cell
-                // height and the mouse_scroll_multiplier setting).
-                const yoff_max: f64 = if (yoff > 0)
-                    @max(yoff, 1)
-                else
-                    @min(yoff, -1);
+            // Round out the yoff to an absolute minimum of 1. macos tries to
+            // simulate precision scrolling with non precision events by
+            // ramping up the magnitude of the offsets as it detects faster
+            // scrolling. Single click (very slow) scrolls are reported with a
+            // magnitude of 0.1 which would normally require a few clicks
+            // before we register an actual scroll event (depending on cell
+            // height and the mouse_scroll_multiplier setting).
+            const yoff_max: f64 = if (yoff > 0)
+                @max(yoff, 1)
+            else
+                @min(yoff, -1);
 
-                break :yoff_adjusted yoff_max * cell_size * self.config.mouse_scroll_multiplier.discrete;
-            } else {
-                break :yoff_adjusted yoff * cell_size * self.config.mouse_scroll_multiplier.discrete;
-            }
+            break :yoff_adjusted yoff_max * cell_size * self.config.mouse_scroll_multiplier.discrete;
         };
 
         // Add our previously saved pending amount to the offset to get the
@@ -5301,12 +5242,6 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
             .tab,
         ),
 
-        .prompt_window_title => return try self.rt_app.performAction(
-            .{ .surface = self },
-            .prompt_title,
-            .window,
-        ),
-
         .set_surface_title => |v| {
             const title = try self.alloc.dupeZ(u8, v);
             defer self.alloc.free(title);
@@ -5323,16 +5258,6 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
             return try self.rt_app.performAction(
                 .{ .surface = self },
                 .set_tab_title,
-                .{ .title = title },
-            );
-        },
-
-        .set_window_title => |v| {
-            const title = try self.alloc.dupeZ(u8, v);
-            defer self.alloc.free(title);
-            return try self.rt_app.performAction(
-                .{ .surface = self },
-                .set_window_title,
                 .{ .title = title },
             );
         },
@@ -5576,18 +5501,6 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
             },
         ),
 
-        .toggle_window_decorations => return try self.rt_app.performAction(
-            .{ .surface = self },
-            .toggle_window_decorations,
-            {},
-        ),
-
-        .toggle_tab_overview => return try self.rt_app.performAction(
-            .{ .surface = self },
-            .toggle_tab_overview,
-            {},
-        ),
-
         .toggle_window_float_on_top => return try self.rt_app.performAction(
             .{ .surface = self },
             .float_window,
@@ -5620,12 +5533,6 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
         .toggle_background_opacity => return try self.rt_app.performAction(
             .{ .surface = self },
             .toggle_background_opacity,
-            {},
-        ),
-
-        .show_on_screen_keyboard => return try self.rt_app.performAction(
-            .{ .surface = self },
-            .show_on_screen_keyboard,
             {},
         ),
 
@@ -5863,10 +5770,7 @@ fn writeScreenFile(
     var file = try tmp_dir.dir.createFile(
         global.io(),
         filename,
-        switch (builtin.os.tag) {
-            .windows => .{},
-            else => .{ .permissions = .fromMode(0o600) },
-        },
+        .{ .permissions = .fromMode(0o600) },
     );
     defer file.close(global.io());
 

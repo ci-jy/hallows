@@ -1,81 +1,7 @@
+//! Locale helpers backed by libintl. Hallows isn't translated, but macOS
+//! reports the user's preferred languages in BCP-47 format and we need
+//! POSIX locale names for LANG.
 const std = @import("std");
-const builtin = @import("builtin");
-const build_config = @import("../build_config.zig");
-const locales = @import("i18n_locales.zig");
-
-const log = std.log.scoped(.i18n);
-
-/// Set for faster membership lookup of locales.
-pub const locales_map = map: {
-    var kvs: [locales.len]struct { []const u8 } = undefined;
-    for (locales, 0..) |locale, i| kvs[i] = .{locale};
-    break :map std.StaticStringMap(void).initComptime(kvs);
-};
-
-pub const InitError = error{
-    InvalidResourcesDir,
-    OutOfMemory,
-};
-
-/// Initialize i18n support for the application. This should be
-/// called automatically by the global state initialization
-/// in global.zig.
-///
-/// This calls `bindtextdomain` for gettext with the proper directory
-/// of translations. This does NOT call `textdomain` as we don't
-/// want to set the domain for the entire application since this is also
-/// used by libghostty.
-pub fn init(resources_dir: []const u8) InitError!void {
-    if (comptime !build_config.i18n) return;
-
-    switch (builtin.os.tag) {
-        // i18n is unsupported on Windows
-        .windows => return,
-
-        else => {
-            // Our resources dir is always nested below the share dir that
-            // is standard for translations.
-            const share_dir = std.fs.path.dirname(resources_dir) orelse
-                return error.InvalidResourcesDir;
-
-            // Build our locale path
-            var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-            const path = std.fmt.bufPrintZ(&buf, "{s}/locale", .{share_dir}) catch
-                return error.OutOfMemory;
-
-            // Bind our bundle ID to the given locale path
-            log.debug("binding domain={s} path={s}", .{ build_config.bundle_id, path });
-            _ = bindtextdomain(build_config.bundle_id, path.ptr) orelse
-                return error.OutOfMemory;
-        },
-    }
-}
-
-/// Set the global gettext domain to our bundle ID, allowing unqualified
-/// `gettext` (`_`) calls to look up translations for our application.
-///
-/// This should only be called for apprts that are fully owning the
-/// Ghostty application. This should not be called for libghostty users.
-pub fn initGlobalDomain() error{OutOfMemory}!void {
-    if (comptime !build_config.i18n) return;
-    _ = textdomain(build_config.bundle_id) orelse return error.OutOfMemory;
-}
-
-/// Translate a message for the Ghostty domain.
-///
-/// If this is called at comptime, the direct msgid is returned without
-/// translation. This still allows the string to be marked for translation
-/// while remaining usable in comptime contexts.
-pub fn _(msgid: [*:0]const u8) [*:0]const u8 {
-    if (comptime !build_config.i18n) return msgid;
-    if (@inComptime()) return msgid;
-    return dgettext(build_config.bundle_id, msgid);
-}
-
-/// Mark a string for translation without translating it immediately.
-pub fn N_(msgid: [:0]const u8) [:0]const u8 {
-    return msgid;
-}
 
 /// Canonicalize a locale name from a platform-specific value to
 /// a POSIX-compliant value. This is a thin layer over the unexported
@@ -91,21 +17,13 @@ pub fn N_(msgid: [:0]const u8) [:0]const u8 {
 /// it should be at least as long as locale in case the locale
 /// is unchanged.
 ///
-/// Here is the logic for macOS, but other platforms also have
-/// their own canonicalization logic:
+/// Here is the logic for macOS:
 ///
 /// https://github.com/coreutils/gnulib/blob/5b92dd0a45c8d27f13a21076b57095ea5e220870/lib/localename.c#L1171
 pub fn canonicalizeLocale(
     buf: []u8,
     locale: []const u8,
 ) error{NoSpaceLeft}![:0]const u8 {
-    if (comptime !build_config.i18n) {
-        if (buf.len < locale.len + 1) return error.NoSpaceLeft;
-        @memcpy(buf[0..locale.len], locale);
-        buf[locale.len] = 0;
-        return buf[0..locale.len :0];
-    }
-
     // Fix zh locales for macOS
     if (fixZhLocale(locale)) |fixed| {
         if (buf.len < fixed.len + 1) return error.NoSpaceLeft;
@@ -156,34 +74,11 @@ fn fixZhLocale(locale: []const u8) ?[:0]const u8 {
     return null;
 }
 
-/// This can be called at any point a compile-time-known locale is
-/// available. This will use comptime to verify the locale is supported.
-pub fn staticLocale(comptime v: [*:0]const u8) [*:0]const u8 {
-    comptime {
-        for (locales) |locale| {
-            if (std.mem.eql(u8, locale, v)) {
-                return locale;
-            }
-        }
-
-        @compileError("unsupported locale");
-    }
-}
-
-// Manually include function definitions for the gettext functions
-// as libintl.h isn't always easily available (e.g. in musl)
-extern fn bindtextdomain(domainname: [*:0]const u8, dirname: [*:0]const u8) ?[*:0]const u8;
-extern fn textdomain(domainname: [*:0]const u8) ?[*:0]const u8;
-extern fn dgettext(domainname: [*:0]const u8, msgid: [*:0]const u8) [*:0]const u8;
-
 // This is only available if we're building libintl from source
-// since its otherwise not exported. We only need it on macOS
-// currently but probably will on Windows as well.
+// since its otherwise not exported.
 extern fn _libintl_locale_name_canonicalize(name: [*:0]u8) void;
 
-test "canonicalizeLocale darwin" {
-    if (!builtin.target.os.tag.isDarwin()) return error.SkipZigTest;
-
+test "canonicalizeLocale" {
     const testing = std.testing;
     var buf: [256]u8 = undefined;
     try testing.expectEqualStrings("en_US", try canonicalizeLocale(&buf, "en_US"));
@@ -200,11 +95,4 @@ test "canonicalizeLocale darwin" {
     // canonicalizeLocale does not handle encodings and will turn them into
     // underscores. We should parse them out before calling this function.
     try testing.expectEqualStrings("en_US.UTF_8", try canonicalizeLocale(&buf, "en_US.UTF-8"));
-}
-
-test "_ returns msgid at comptime" {
-    const testing = std.testing;
-
-    const msgid = comptime @"_"("Ghostty");
-    try testing.expectEqualStrings("Ghostty", std.mem.span(msgid));
 }

@@ -2,32 +2,18 @@ const std = @import("std");
 const builtin = @import("builtin");
 const Allocator = std.mem.Allocator;
 const assert = @import("../quirks.zig").inlineAssert;
-const fontconfig = @import("fontconfig");
 const macos = @import("macos");
 const opentype = @import("opentype.zig");
 const options = @import("main.zig").options;
 const Collection = @import("main.zig").Collection;
 const DeferredFace = @import("main.zig").DeferredFace;
-const Face = @import("main.zig").Face;
 const Library = @import("main.zig").Library;
-const Presentation = @import("main.zig").Presentation;
 const Variation = @import("main.zig").face.Variation;
-const global = @import("../global.zig");
 
 const log = std.log.scoped(.discovery);
 
 /// Discover implementation for the compile options.
-pub const Discover = switch (options.backend) {
-    .freetype => void, // no discovery
-    .freetype_windows => Windows,
-    .fontconfig_freetype => Fontconfig,
-    .web_canvas => void, // no discovery
-    .coretext,
-    .coretext_freetype,
-    .coretext_harfbuzz,
-    .coretext_noshape,
-    => CoreText,
-};
+pub const Discover = CoreText;
 
 /// Descriptor is used to search for fonts. The only required field
 /// is "family". The rest are ignored unless they're set to a non-zero
@@ -38,9 +24,6 @@ pub const Descriptor = struct {
     /// owned by the caller and should be freed when this descriptor
     /// is no longer in use. The discovery structs will never store the
     /// descriptor.
-    ///
-    /// On systems that use fontconfig (Linux), this can be a full
-    /// fontconfig pattern, such as "Fira Code-14:bold".
     family: ?[:0]const u8 = null,
 
     /// Specific font style to search for. This will filter the style
@@ -53,8 +36,8 @@ pub const Descriptor = struct {
     codepoint: u32 = 0,
 
     /// Font size in points that the font should support. For conversion
-    /// to pixels, we will use 72 DPI for Mac and 96 DPI for everything else.
-    /// (If pixel conversion is necessary, i.e. emoji fonts)
+    /// to pixels, we will use 72 DPI. (If pixel conversion is necessary,
+    /// i.e. emoji fonts)
     size: f32 = 0,
 
     /// True if we want to search specifically for a font that supports
@@ -110,51 +93,6 @@ pub const Descriptor = struct {
         copy.style = if (self.style) |src| try alloc.dupeZ(u8, src) else null;
         copy.variations = try alloc.dupe(Variation, self.variations);
         return copy;
-    }
-
-    /// Convert to Fontconfig pattern to use for lookup. The pattern does
-    /// not have defaults filled/substituted (Fontconfig thing) so callers
-    /// must still do this.
-    pub fn toFcPattern(self: Descriptor) *fontconfig.Pattern {
-        const pat = fontconfig.Pattern.create();
-        if (self.family) |family| {
-            assert(pat.add(.family, .{ .string = family }, false));
-        }
-        if (self.style) |style| {
-            assert(pat.add(.style, .{ .string = style }, false));
-        }
-        if (self.codepoint > 0) {
-            const cs = fontconfig.CharSet.create();
-            defer cs.destroy();
-            assert(cs.addChar(self.codepoint));
-            assert(pat.add(.charset, .{ .char_set = cs }, false));
-        }
-        if (self.size > 0) assert(pat.add(
-            .size,
-            .{ .integer = @intFromFloat(@round(self.size)) },
-            false,
-        ));
-        if (self.bold) assert(pat.add(
-            .weight,
-            .{ .integer = @intFromEnum(fontconfig.Weight.bold) },
-            false,
-        ));
-        if (self.italic) assert(pat.add(
-            .slant,
-            .{ .integer = @intFromEnum(fontconfig.Slant.italic) },
-            false,
-        ));
-
-        // For fontconfig, we always add monospace in the pattern. Since
-        // fontconfig sorts by closeness to the pattern, this doesn't fully
-        // exclude non-monospace but helps prefer it.
-        assert(pat.add(
-            .spacing,
-            .{ .integer = @intFromEnum(fontconfig.Spacing.mono) },
-            false,
-        ));
-
-        return pat;
     }
 
     /// Convert to Core Text font descriptor to use for lookup or
@@ -243,100 +181,6 @@ pub const Descriptor = struct {
 
         return try macos.text.FontDescriptor.createWithAttributes(@ptrCast(attrs));
     }
-};
-
-pub const Fontconfig = struct {
-    fc_config: *fontconfig.Config,
-
-    pub fn init(lib: Library) Fontconfig {
-        _ = lib;
-        // safe to call multiple times and concurrently
-        _ = fontconfig.init();
-        return .{ .fc_config = fontconfig.initLoadConfigAndFonts() };
-    }
-
-    pub fn deinit(self: *Fontconfig) void {
-        self.fc_config.destroy();
-    }
-
-    /// Discover fonts from a descriptor. This returns an iterator that can
-    /// be used to build up the deferred fonts.
-    pub fn discover(
-        self: *const Fontconfig,
-        alloc: Allocator,
-        desc: Descriptor,
-    ) !DiscoverIterator {
-        _ = alloc;
-
-        // Build our pattern that we'll search for
-        const pat = desc.toFcPattern();
-        errdefer pat.destroy();
-        assert(self.fc_config.substituteWithPat(pat, .pattern));
-        pat.defaultSubstitute();
-
-        // Search
-        const res = self.fc_config.fontSort(pat, false, null);
-        if (res.result != .match) return error.FontConfigFailed;
-        errdefer res.fs.destroy();
-
-        return .{
-            .config = self.fc_config,
-            .pattern = pat,
-            .set = res.fs,
-            .fonts = res.fs.fonts(),
-            .variations = desc.variations,
-            .i = 0,
-        };
-    }
-
-    pub fn discoverFallback(
-        self: *const Fontconfig,
-        alloc: Allocator,
-        collection: *Collection,
-        desc: Descriptor,
-    ) !DiscoverIterator {
-        _ = collection;
-        return try self.discover(alloc, desc);
-    }
-
-    pub const DiscoverIterator = struct {
-        config: *fontconfig.Config,
-        pattern: *fontconfig.Pattern,
-        set: *fontconfig.FontSet,
-        fonts: []*fontconfig.Pattern,
-        variations: []const Variation,
-        i: usize,
-
-        pub fn deinit(self: *DiscoverIterator) void {
-            self.set.destroy();
-            self.pattern.destroy();
-            self.* = undefined;
-        }
-
-        pub fn next(self: *DiscoverIterator) fontconfig.Error!?DeferredFace {
-            if (self.i >= self.fonts.len) return null;
-
-            // Get the copied pattern from our fontset that has the
-            // attributes configured for rendering.
-            const font_pattern = try self.config.fontRenderPrepare(
-                self.pattern,
-                self.fonts[self.i],
-            );
-            errdefer font_pattern.destroy();
-
-            // Increment after we return
-            defer self.i += 1;
-
-            return DeferredFace{
-                .fc = .{
-                    .pattern = font_pattern,
-                    .charset = (try font_pattern.get(.charset, 0)).char_set,
-                    .langset = (try font_pattern.get(.lang, 0)).lang_set,
-                    .variations = self.variations,
-                },
-            };
-        }
-    };
 };
 
 pub const CoreText = struct {
@@ -951,265 +795,6 @@ pub const CoreText = struct {
     };
 };
 
-/// Windows font discovery. Enumerates font files in the system and
-/// per-user font directories and matches them to a descriptor via
-/// FreeType's family_name field (with a fallback to the SFNT name
-/// table when family_name is missing).
-///
-/// No external service is used; each discover() call walks the
-/// directories, opening candidate files with FreeType only as needed.
-/// For typical Windows installations (~300 fonts) a name query is in
-/// the tens of milliseconds. A codepoint fallback query may be
-/// noticeably slower because every candidate has to be opened to
-/// probe its CMap.
-pub const Windows = struct {
-    lib: Library,
-
-    pub fn init(lib: Library) Windows {
-        return .{ .lib = lib };
-    }
-
-    pub fn deinit(self: *Windows) void {
-        _ = self;
-    }
-
-    pub fn discover(
-        self: *const Windows,
-        alloc: Allocator,
-        desc: Descriptor,
-    ) !DiscoverIterator {
-        return .{
-            .alloc = alloc,
-            .lib = self.lib,
-            .desc = desc,
-            .variations = desc.variations,
-            .state = .system,
-            .dir = null,
-            .iter = null,
-            .system_path = null,
-            .user_path = null,
-        };
-    }
-
-    pub fn discoverFallback(
-        self: *const Windows,
-        alloc: Allocator,
-        collection: *Collection,
-        desc: Descriptor,
-    ) !DiscoverIterator {
-        _ = collection;
-        return self.discover(alloc, desc);
-    }
-
-    pub const DiscoverIterator = struct {
-        alloc: Allocator,
-        lib: Library,
-        desc: Descriptor,
-        variations: []const Variation,
-        state: State,
-        dir: ?std.Io.Dir,
-        iter: ?std.Io.Dir.Iterator,
-        system_path: ?[:0]const u8,
-        user_path: ?[:0]const u8,
-
-        const State = enum { system, user, done };
-
-        pub fn deinit(self: *DiscoverIterator) void {
-            if (self.dir) |*d| d.close(global.io());
-            if (self.system_path) |p| self.alloc.free(p);
-            if (self.user_path) |p| self.alloc.free(p);
-            self.* = undefined;
-        }
-
-        pub fn next(self: *DiscoverIterator) !?DeferredFace {
-            while (true) {
-                // Ensure we have a directory iterator for the current state.
-                if (self.iter == null) {
-                    switch (self.state) {
-                        .system => {
-                            const path = self.systemFontsPath() orelse {
-                                self.state = .user;
-                                continue;
-                            };
-                            self.system_path = path;
-                            self.dir = std.Io.Dir.openDirAbsolute(
-                                global.io(),
-                                path,
-                                .{ .iterate = true },
-                            ) catch {
-                                self.state = .user;
-                                continue;
-                            };
-                            self.iter = self.dir.?.iterate();
-                        },
-                        .user => {
-                            const path = self.userFontsPath() orelse {
-                                self.state = .done;
-                                continue;
-                            };
-                            self.user_path = path;
-                            self.dir = std.Io.Dir.openDirAbsolute(
-                                global.io(),
-                                path,
-                                .{ .iterate = true },
-                            ) catch {
-                                self.state = .done;
-                                continue;
-                            };
-                            self.iter = self.dir.?.iterate();
-                        },
-                        .done => return null,
-                    }
-                }
-
-                const entry = (self.iter.?.next(global.io()) catch null) orelse {
-                    // Finished this directory; advance state.
-                    if (self.dir) |*d| d.close(global.io());
-                    self.dir = null;
-                    self.iter = null;
-                    self.state = switch (self.state) {
-                        .system => .user,
-                        .user => .done,
-                        .done => .done,
-                    };
-                    continue;
-                };
-
-                if (entry.kind != .file) continue;
-                if (!isFontFile(entry.name)) continue;
-
-                if (try self.tryMatch(entry.name)) |face| return face;
-            }
-        }
-
-        /// Build the system fonts directory from %SYSTEMROOT%. Returns null
-        /// if SYSTEMROOT is unset, which shouldn't happen on a healthy
-        /// Windows install but we just skip the directory rather than
-        /// falling back to a hardcoded drive letter.
-        fn systemFontsPath(self: *DiscoverIterator) ?[:0]const u8 {
-            const systemroot = global.environ().getAlloc(
-                self.alloc,
-                "SYSTEMROOT",
-            ) catch return null;
-            defer self.alloc.free(systemroot);
-            return std.fmt.allocPrintSentinel(
-                self.alloc,
-                "{s}\\Fonts",
-                .{systemroot},
-                0,
-            ) catch null;
-        }
-
-        fn userFontsPath(self: *DiscoverIterator) ?[:0]const u8 {
-            const local_appdata = global.environ().getAlloc(
-                self.alloc,
-                "LOCALAPPDATA",
-            ) catch return null;
-            defer self.alloc.free(local_appdata);
-            return std.fmt.allocPrintSentinel(
-                self.alloc,
-                "{s}\\Microsoft\\Windows\\Fonts",
-                .{local_appdata},
-                0,
-            ) catch null;
-        }
-
-        fn tryMatch(
-            self: *DiscoverIterator,
-            name: []const u8,
-        ) !?DeferredFace {
-            const dir_path = switch (self.state) {
-                .system => self.system_path.?,
-                .user => self.user_path.?,
-                .done => return null,
-            };
-
-            var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-            const full_path = std.fmt.bufPrintZ(
-                &path_buf,
-                "{s}\\{s}",
-                .{ dir_path, name },
-            ) catch return null;
-
-            const is_ttc = std.ascii.endsWithIgnoreCase(name, ".ttc");
-            const max_faces: i32 = if (is_ttc) 16 else 1;
-
-            // Probe each face in the file.
-            var face_index: i32 = 0;
-            while (face_index < max_faces) : (face_index += 1) {
-                var face = Face.initFile(
-                    self.lib,
-                    full_path,
-                    face_index,
-                    .{ .size = .{ .points = 12 } },
-                ) catch break;
-
-                if (self.matches(&face)) {
-                    return try self.makeDeferred(face, full_path, face_index);
-                }
-
-                face.deinit();
-            }
-
-            return null;
-        }
-
-        /// Check whether the given face matches the descriptor.
-        fn matches(self: *const DiscoverIterator, face: *Face) bool {
-            if (self.desc.family) |family| {
-                if (!familyMatches(face, family)) return false;
-            }
-            if (self.desc.codepoint != 0) {
-                if (face.glyphIndex(self.desc.codepoint) == null) return false;
-            }
-            return true;
-        }
-
-        fn makeDeferred(
-            self: *DiscoverIterator,
-            face: Face,
-            full_path: []const u8,
-            face_index: i32,
-        ) !DeferredFace {
-            const path_owned = try self.alloc.dupeZ(u8, full_path);
-            errdefer self.alloc.free(path_owned);
-
-            const presentation: Presentation =
-                if (face.hasColor()) .emoji else .text;
-
-            return DeferredFace{
-                .win = .{
-                    .path = path_owned,
-                    .face_index = face_index,
-                    .variations = self.variations,
-                    .peek = face,
-                    .presentation = presentation,
-                    .alloc = self.alloc,
-                },
-            };
-        }
-    };
-
-    fn isFontFile(name: []const u8) bool {
-        return std.ascii.endsWithIgnoreCase(name, ".ttf") or
-            std.ascii.endsWithIgnoreCase(name, ".ttc") or
-            std.ascii.endsWithIgnoreCase(name, ".otf");
-    }
-
-    /// Compare a face's family against a requested family name. Checks
-    /// FreeType's family_name first, then falls back to the SFNT name
-    /// table entry.
-    fn familyMatches(face: *Face, family: [:0]const u8) bool {
-        const ft_family: ?[*:0]const u8 = face.face.handle.*.family_name;
-        if (ft_family) |f| {
-            if (std.ascii.eqlIgnoreCase(std.mem.span(f), family)) return true;
-        }
-        var buf: [256]u8 = undefined;
-        const sfnt = face.name(&buf) catch "";
-        return sfnt.len > 0 and std.ascii.eqlIgnoreCase(sfnt, family);
-    }
-};
-
 test "descriptor hash" {
     const testing = std.testing;
 
@@ -1223,45 +808,6 @@ test "descriptor hash family names" {
     var d1: Descriptor = .{ .family = "A" };
     var d2: Descriptor = .{ .family = "B" };
     try testing.expect(d1.hashcode() != d2.hashcode());
-}
-
-test "fontconfig" {
-    if (options.backend != .fontconfig_freetype) return error.SkipZigTest;
-
-    const testing = std.testing;
-    const alloc = testing.allocator;
-
-    var lib = try Library.init(alloc);
-    defer lib.deinit();
-
-    var fc = Fontconfig.init(lib);
-    defer fc.deinit();
-    var it = try fc.discover(alloc, .{ .family = "monospace", .size = 12 });
-    defer it.deinit();
-}
-
-test "fontconfig codepoint" {
-    if (options.backend != .fontconfig_freetype) return error.SkipZigTest;
-
-    const testing = std.testing;
-    const alloc = testing.allocator;
-
-    var lib = try Library.init(alloc);
-    defer lib.deinit();
-
-    var fc = Fontconfig.init(lib);
-    defer fc.deinit();
-    var it = try fc.discover(alloc, .{ .codepoint = 'A', .size = 12 });
-    defer it.deinit();
-
-    // The first result should have the codepoint. Later ones may not
-    // because fontconfig returns all fonts sorted.
-    var face = (try it.next()).?;
-    defer face.deinit();
-    try testing.expect(face.hasCodepoint('A', null));
-
-    // Should have other codepoints too
-    try testing.expect(face.hasCodepoint('B', null));
 }
 
 test "coretext" {
@@ -1301,7 +847,7 @@ test "coretext codepoint" {
     defer it.deinit();
 
     // The first result should have the codepoint. Later ones may not
-    // because fontconfig returns all fonts sorted.
+    // because CoreText returns all fonts sorted.
     const face = (try it.next()).?;
     try testing.expect(face.hasCodepoint('A', null));
 
@@ -1392,25 +938,4 @@ test "coretext sorting" {
         const name = try res.name(&buf);
         try testing.expectEqualStrings("SF Pro Bold Italic", name);
     }
-}
-
-test "windows" {
-    if (options.backend != .freetype_windows) return error.SkipZigTest;
-
-    const testing = std.testing;
-    const alloc = testing.allocator;
-
-    var lib = try Library.init(alloc);
-    defer lib.deinit();
-
-    var win = Windows.init(lib);
-    defer win.deinit();
-
-    // Arial ships on every stock Windows install.
-    var it = try win.discover(alloc, .{ .family = "Arial", .size = 12 });
-    defer it.deinit();
-
-    var face = (try it.next()) orelse return error.TestFontNotFound;
-    defer face.deinit();
-    try testing.expect(face.hasCodepoint('A', null));
 }

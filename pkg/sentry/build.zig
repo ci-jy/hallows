@@ -38,15 +38,9 @@ pub fn build(b: *std.Build) !void {
 
     var flags: std.ArrayList([]const u8) = .empty;
     defer flags.deinit(b.allocator);
-    if (target.result.os.tag == .windows) {
-        try flags.appendSlice(b.allocator, &.{
-            "-DSENTRY_WITH_UNWINDER_DBGHELP",
-        });
-    } else {
-        try flags.appendSlice(b.allocator, &.{
-            "-DSENTRY_WITH_UNWINDER_LIBBACKTRACE",
-        });
-    }
+    try flags.appendSlice(b.allocator, &.{
+        "-DSENTRY_WITH_UNWINDER_LIBBACKTRACE",
+    });
     switch (backend) {
         .crashpad => try flags.append(b.allocator, "-DSENTRY_BACKEND_CRASHPAD"),
         .breakpad => try flags.append(b.allocator, "-DSENTRY_BACKEND_BREAKPAD"),
@@ -63,75 +57,26 @@ pub fn build(b: *std.Build) !void {
             .flags = flags.items,
         });
 
-        // Linux-only
-        if (target.result.os.tag == .linux) {
-            lib.root_module.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "vendor/stb_sprintf.c",
-                },
-                .flags = flags.items,
-            });
-        }
-
         // Symbolizer + Unwinder
-        if (target.result.os.tag == .windows) {
-            lib.root_module.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/sentry_windows_dbghelp.c",
-                    "src/path/sentry_path_windows.c",
-                    "src/symbolizer/sentry_symbolizer_windows.c",
-                    "src/unwinder/sentry_unwinder_dbghelp.c",
-                },
-                .flags = flags.items,
-            });
-        } else {
-            lib.root_module.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/sentry_unix_pageallocator.c",
-                    "src/path/sentry_path_unix.c",
-                    "src/symbolizer/sentry_symbolizer_unix.c",
-                    "src/unwinder/sentry_unwinder_libbacktrace.c",
-                },
-                .flags = flags.items,
-            });
-        }
+        lib.root_module.addCSourceFiles(.{
+            .root = upstream.path(""),
+            .files = &.{
+                "src/sentry_unix_pageallocator.c",
+                "src/path/sentry_path_unix.c",
+                "src/symbolizer/sentry_symbolizer_unix.c",
+                "src/unwinder/sentry_unwinder_libbacktrace.c",
+            },
+            .flags = flags.items,
+        });
 
         // Module finder
-        switch (target.result.os.tag) {
-            .windows => lib.root_module.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/modulefinder/sentry_modulefinder_windows.c",
-                },
-                .flags = flags.items,
-            }),
-
-            .macos, .ios => lib.root_module.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/modulefinder/sentry_modulefinder_apple.c",
-                },
-                .flags = flags.items,
-            }),
-
-            .linux => lib.root_module.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/modulefinder/sentry_modulefinder_linux.c",
-                },
-                .flags = flags.items,
-            }),
-
-            .freestanding => {},
-
-            else => {
-                std.log.warn("target={} not supported", .{target.result.os.tag});
-                return error.UnsupportedTarget;
+        lib.root_module.addCSourceFiles(.{
+            .root = upstream.path(""),
+            .files = &.{
+                "src/modulefinder/sentry_modulefinder_apple.c",
             },
-        }
+            .flags = flags.items,
+        });
 
         // Transport
         switch (transport) {
@@ -139,14 +84,6 @@ pub fn build(b: *std.Build) !void {
                 .root = upstream.path(""),
                 .files = &.{
                     "src/transports/sentry_transport_curl.c",
-                },
-                .flags = flags.items,
-            }),
-
-            .winhttp => lib.root_module.addCSourceFiles(.{
-                .root = upstream.path(""),
-                .files = &.{
-                    "src/transports/sentry_transport_winhttp.c",
                 },
                 .flags = flags.items,
             }),
@@ -249,4 +186,4 @@ const srcs: []const []const u8 = &.{
 };
 
 pub const Backend = enum { crashpad, breakpad, inproc, none };
-pub const Transport = enum { curl, winhttp, none };
+pub const Transport = enum { curl, none };

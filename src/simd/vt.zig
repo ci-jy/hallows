@@ -55,8 +55,7 @@ fn utf8DecodeUntilControlSeqScalar(
 
         // ASCII fast path. Use vectorization if it is available. This
         // path is only run when simd=false, but that only controls our C++
-        // simd builds. We can still rely on Zig intrinsics for platforms
-        // like wasm32+simd128.
+        // simd builds. We can still rely on Zig intrinsics.
         if (b0 < 0x80) {
             if (comptime std.simd.suggestVectorLength(u8)) |vl| {
                 const V = @Vector(vl, u8);

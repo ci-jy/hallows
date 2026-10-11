@@ -29,8 +29,6 @@ const Page = pagepkg.Page;
 const Row = pagepkg.Row;
 
 const log = std.log.scoped(.page_list);
-const native_freestanding = builtin.os.tag == .freestanding and
-    !builtin.target.cpu.arch.isWasm();
 
 /// The number of pages we preheat the page pool with. For operating systems
 /// that support it, pages are demand-paged (see PagePool) so this only
@@ -324,20 +322,10 @@ const std_capacity = pagepkg.std_capacity;
 /// The byte size required for a standard page.
 const std_size = Page.layout(std_capacity).total_size;
 
-/// True when the page pool is the wasm page pool, which recycles items
-/// through a free list shared by the whole module instance instead of
-/// dying with the pool.
-///
-/// Test builds use the native pool even on wasm so that pool memory goes
-/// through the testing allocator and participates in leak detection.
-const wasm_page_pool = builtin.target.cpu.arch.isWasm() and !builtin.is_test;
-
 /// The memory pool we use for page memory buffers. We use a separate pool
 /// so we can allocate these with a page allocator. We have to use a page
 /// allocator because we need memory that is zero-initialized and page-aligned.
-const PagePool = if (wasm_page_pool)
-    datastruct.WasmPagePool([std_size]u8)
-else untouched: {
+const PagePool = untouched: {
     // Untouched pools never read/write to the items so that we can
     // use demand-paging on operating systems that support it. This makes
     // it so that an idle item in the pool costs no physical memory,
@@ -565,18 +553,16 @@ fn initialCapacity(cols: size.CellCountInt) Capacity {
 
 /// Returns the allocator used for underlying page allocations.
 ///
-/// `alloc` is the caller-provided allocator. It is used on native freestanding
-/// targets, where no OS page allocator is available. Other targets select a
-/// platform-specific allocator below.
+/// `alloc` is the caller-provided allocator. It isn't used: tests use the
+/// testing allocator and other builds select a platform-specific allocator
+/// below.
 inline fn pageAllocator(alloc: Allocator) Allocator {
+    _ = alloc;
+
     // In tests we use our testing allocator so we can detect leaks.
     if (builtin.is_test) return std.testing.allocator;
 
-    // Native freestanding targets don't have an OS page allocator, so use
-    // the allocator provided by the embedder.
-    if (native_freestanding) return alloc;
-
-    // On non-macOS we use our standard Zig page allocator.
+    // On Linux (hallows-persist) we use our standard Zig page allocator.
     if (!builtin.target.os.tag.isDarwin()) return std.heap.page_allocator;
 
     // On macOS we want to tag our memory so we can assign it to our
@@ -760,12 +746,9 @@ fn initPages(
             page_alloc.free(page_buf);
 
         // In runtime safety modes we have to memset because the Zig allocator
-        // interface will always memset to 0xAA for undefined. On freestanding
-        // (WASM), the WasmAllocator reuses freed slots without zeroing since
-        // only fresh memory.grow pages are guaranteed zero by the WASM spec.
-        // On native, the OS page allocator (mmap) returns zeroed pages.
-        if (comptime std.debug.runtime_safety or builtin.os.tag == .freestanding)
-            @memset(page_buf, 0);
+        // interface will always memset to 0xAA for undefined. Otherwise the
+        // OS page allocator (mmap) returns zeroed pages.
+        if (comptime std.debug.runtime_safety) @memset(page_buf, 0);
 
         // Initialize the first set of pages to contain our viewport so that
         // the top of the first page is always the active area.
@@ -948,15 +931,6 @@ fn releasePages(pool: *MemoryPool, list: List) void {
 fn releasePoolPage(pool: *MemoryPool, page: *const Page) void {
     const item: *align(std.heap.page_size_min) [std_size]u8 =
         @ptrCast(@alignCast(page.memory.ptr));
-
-    // The wasm pool's items are shared by every pool in the module and
-    // never return to the allocator, so they go back to the free list
-    // zeroed for reuse (mirroring destroyNodeExt).
-    if (comptime wasm_page_pool) {
-        _ = terminal_mem.decommit(.zero, item, page.memory.len);
-        pool.pages.destroy(item);
-        return;
-    }
 
     pool.pages.release(item);
 }
@@ -4638,15 +4612,13 @@ inline fn createPageExt(
     else
         page_alloc.free(page_buf);
 
-    // In runtime safety modes, allocators fill with 0xAA. On freestanding
-    // (WASM), the WasmAllocator reuses freed slots without zeroing.
+    // In runtime safety modes, allocators fill with 0xAA.
     //
     // Otherwise, we rely on pool item buffers being zeroed: fresh items
     // come from the OS page allocator (zeroed pages), destroyNodeExt
     // zeroes buffers before returning them to the pool, and the pool
     // never writes into its items (see PagePool).
-    if (comptime std.debug.runtime_safety or builtin.os.tag == .freestanding)
-        @memset(page_buf, 0);
+    if (comptime std.debug.runtime_safety) @memset(page_buf, 0);
 
     page.* = .{
         .data = .{ .resident = .initBuf(.init(page_buf), layout) },

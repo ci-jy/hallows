@@ -8,7 +8,6 @@ const SharedGrid = @import("main.zig").SharedGrid;
 pub const noop = @import("shaper/noop.zig");
 pub const harfbuzz = @import("shaper/harfbuzz.zig");
 pub const coretext = @import("shaper/coretext.zig");
-pub const web_canvas = @import("shaper/web_canvas.zig");
 pub const Cache = @import("shaper/Cache.zig");
 pub const TextRun = run.TextRun;
 pub const RunIterator = run.RunIterator;
@@ -18,9 +17,6 @@ pub const default_features = feature.default_features;
 
 /// Shaper implementation for our compile options.
 pub const Shaper = switch (options.backend) {
-    .freetype,
-    .freetype_windows,
-    .fontconfig_freetype,
     .coretext_freetype,
     .coretext_harfbuzz,
     => harfbuzz.Shaper,
@@ -31,8 +27,6 @@ pub const Shaper = switch (options.backend) {
     .coretext => coretext.Shaper,
 
     .coretext_noshape => noop.Shaper,
-
-    .web_canvas => web_canvas.Shaper,
 };
 
 /// A cell is a single glyph within a terminal that should be rendered

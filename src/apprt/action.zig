@@ -1,5 +1,4 @@
 const std = @import("std");
-const build_config = @import("../build_config.zig");
 const assert = @import("../quirks.zig").inlineAssert;
 const apprt = @import("../apprt.zig");
 const configpkg = @import("../config.zig");
@@ -106,12 +105,6 @@ pub const Action = union(Key) {
     /// Toggle fullscreen mode.
     toggle_fullscreen: Fullscreen,
 
-    /// Toggle tab overview.
-    toggle_tab_overview,
-
-    /// Toggle whether window directions are shown.
-    toggle_window_decorations,
-
     /// Toggle the quick terminal in or out.
     toggle_quick_terminal,
 
@@ -189,9 +182,6 @@ pub const Action = union(Key) {
     /// Control whether the inspector is shown or hidden.
     inspector: Inspector,
 
-    /// Show the GTK inspector.
-    show_gtk_inspector,
-
     /// The inspector for the given target has changes and should be
     /// rendered at the next opportunity.
     render_inspector,
@@ -207,9 +197,6 @@ pub const Action = union(Key) {
 
     /// Set the tab title override for the target's tab.
     set_tab_title: SetTitle,
-
-    /// Set the window title override for the target's tab.
-    set_window_title: SetTitle,
 
     /// Set the title of the target to a prompted value. It is up to
     /// the apprt to prompt. The value specifies whether to prompt for the
@@ -326,9 +313,6 @@ pub const Action = union(Key) {
     /// Show a native GUI notification about the progress of some TUI operation.
     progress_report: terminal.osc.Command.ProgressReport,
 
-    /// Show the on-screen keyboard.
-    show_on_screen_keyboard,
-
     /// A command has finished,
     command_finished: CommandFinished,
 
@@ -383,8 +367,6 @@ pub const Action = union(Key) {
         close_all_windows,
         toggle_maximize,
         toggle_fullscreen,
-        toggle_tab_overview,
-        toggle_window_decorations,
         toggle_quick_terminal,
         toggle_command_palette,
         toggle_visibility,
@@ -404,13 +386,11 @@ pub const Action = union(Key) {
         scrollbar,
         render,
         inspector,
-        show_gtk_inspector,
         render_inspector,
         export_terminal_io,
         desktop_notification,
         set_title,
         set_tab_title,
-        set_window_title,
         prompt_title,
         pwd,
         mouse_shape,
@@ -435,7 +415,6 @@ pub const Action = union(Key) {
         open_url,
         show_child_exited,
         progress_report,
-        show_on_screen_keyboard,
         command_finished,
         start_search,
         end_search,
@@ -701,11 +680,10 @@ pub const MouseVisibility = enum(c_int) {
     }
 };
 
-/// Whether to prompt for the surface, tab, or window title.
+/// Whether to prompt for the surface or tab title.
 pub const PromptTitle = enum(c_int) {
     surface,
     tab,
-    window,
 
     test "ghostty.h PromptTitle" {
         try lib.checkGhosttyHEnum(PromptTitle, "GHOSTTY_PROMPT_TITLE_");
@@ -739,16 +717,6 @@ pub const SizeLimit = extern struct {
 pub const InitialSize = extern struct {
     width: u32,
     height: u32,
-
-    /// Make this a valid gobject if we're in a GTK environment.
-    pub const getGObjectType = switch (build_config.app_runtime) {
-        .gtk => @import("gobject").ext.defineBoxed(
-            InitialSize,
-            .{ .name = "GhosttyApprtInitialSize" },
-        ),
-
-        .none => void,
-    };
 };
 
 pub const ProgramStatus = struct {
@@ -1144,9 +1112,6 @@ pub const SearchSelected = struct {
 pub const OpenConfig = enum(c_int) {
     /// Open the config in the OS default editor.
     os_open,
-
-    /// Open the config in a new window using $EDITOR or $VISUAL
-    new_window,
 
     test "ghostty.h OpenConfig" {
         try lib.checkGhosttyHEnum(OpenConfig, "GHOSTTY_ACTION_OPEN_CONFIG_");

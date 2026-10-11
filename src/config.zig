@@ -1,5 +1,3 @@
-const builtin = @import("builtin");
-
 const file_load = @import("config/file_load.zig");
 const formatter = @import("config/formatter.zig");
 const formatter_file = @import("config/formatter_file.zig");
@@ -50,7 +48,6 @@ pub const WorkingDirectory = Config.WorkingDirectory;
 
 // Alternate APIs
 pub const CApi = @import("config/CApi.zig");
-pub const Wasm = if (!builtin.target.cpu.arch.isWasm()) struct {} else @import("config/Wasm.zig");
 
 test {
     @import("std").testing.refAllDecls(@This());

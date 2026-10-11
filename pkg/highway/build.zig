@@ -31,13 +31,6 @@ pub fn build(b: *std.Build) !void {
         module.addIncludePath(upstream.path(""));
     }
 
-    if (target.result.abi.isAndroid()) {
-        const android_ndk = @import("android_ndk");
-        try android_ndk.addPaths(b, lib);
-    }
-
-    // Mainly for iOS simulators, but we add for all Darwin target for
-    // consistency.
     if (target.result.os.tag.isDarwin()) {
         const apple_sdk = @import("apple_sdk");
         try apple_sdk.addPaths(b, lib);
@@ -89,24 +82,10 @@ pub fn build(b: *std.Build) !void {
         "-fno-sanitize-trap=undefined",
     });
 
-    if (target.result.os.tag == .freebsd or target.result.os.tag == .linux) {
-        try flags.append(b.allocator, "-fPIC");
-        lib.root_module.pic = true;
-    }
-
-    if (target.result.os.tag != .windows) {
-        try flags.appendSlice(b.allocator, &.{
-            "-fmath-errno",
-            "-fno-exceptions",
-        });
-    } else if (target.result.abi == .msvc) {
-        try flags.appendSlice(b.allocator, &.{
-            // -fno-autolink also drops UCRT's /alternatename fallback.
-            "-D_Avx2WmemEnabledWeakValue=_Avx2WmemEnabled",
-            "-fno-autolink",
-            "-fno-stack-protector",
-        });
-    }
+    try flags.appendSlice(b.allocator, &.{
+        "-fmath-errno",
+        "-fno-exceptions",
+    });
 
     lib.root_module.addCSourceFiles(.{ .flags = flags.items, .files = &.{
         "src/cpp/abort.cc",

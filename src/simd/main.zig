@@ -12,7 +12,7 @@ pub const codepointWidth = codepoint_width.codepointWidth;
 /// The number of vector lanes to use for manually vectorized hot
 /// loops operating on elements of type T, or null if the target has
 /// no usable SIMD support and a plain scalar loop should be used
-/// instead (e.g. wasm32 without simd128).
+/// instead.
 ///
 /// This is twice the native vector width so that each iteration works
 /// two vector registers, giving better instruction-level parallelism.

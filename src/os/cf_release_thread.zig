@@ -5,7 +5,6 @@
 pub const Thread = @This();
 
 const std = @import("std");
-const builtin = @import("builtin");
 const macos = @import("macos");
 
 const internal_os = @import("../os/main.zig");
@@ -124,9 +123,7 @@ fn threadMain_(self: *Thread) !void {
     // Right now, on Darwin, `std.Thread.setName` can only name the current
     // thread, and we have no way to get the current thread from within it,
     // so instead we use this code to name the thread instead.
-    if (builtin.os.tag.isDarwin()) {
-        internal_os.macos.pthread_setname_np(&"cf_release".*);
-    }
+    internal_os.macos.pthread_setname_np(&"cf_release".*);
 
     // Start the async handlers. We start these first so that they're
     // registered even if anything below fails so we can drain the mailbox.

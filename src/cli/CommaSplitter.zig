@@ -18,13 +18,6 @@
 //! strings. Outside quotes, backslash is a literal character (path separator).
 const CommaSplitter = @This();
 
-const builtin = @import("builtin");
-
-/// Whether backslash acts as an escape character outside quoted strings.
-/// On Windows, backslash is the path separator so it is always literal
-/// outside quotes.
-const escape_outside_quotes = builtin.os.tag != .windows;
-
 pub const Error = error{
     UnclosedQuote,
     UnfinishedEscape,
@@ -87,11 +80,8 @@ pub fn next(self: *CommaSplitter) Error!?[]const u8 {
                 },
                 '\\' => {
                     self.index += 1;
-                    if (comptime escape_outside_quotes) {
-                        last = .normal;
-                        continue :loop .escape;
-                    }
-                    continue :loop .normal;
+                    last = .normal;
+                    continue :loop .escape;
                 },
                 else => {
                     self.index += 1;
@@ -286,7 +276,6 @@ test "splitter 8" {
 }
 
 test "splitter 9" {
-    if (comptime !escape_outside_quotes) return error.SkipZigTest;
     const std = @import("std");
     const testing = std.testing;
 
@@ -295,7 +284,6 @@ test "splitter 9" {
 }
 
 test "splitter 10" {
-    if (comptime !escape_outside_quotes) return error.SkipZigTest;
     const std = @import("std");
     const testing = std.testing;
 
@@ -304,7 +292,6 @@ test "splitter 10" {
 }
 
 test "splitter 11" {
-    if (comptime !escape_outside_quotes) return error.SkipZigTest;
     const std = @import("std");
     const testing = std.testing;
 
@@ -313,7 +300,6 @@ test "splitter 11" {
 }
 
 test "splitter 12" {
-    if (comptime !escape_outside_quotes) return error.SkipZigTest;
     const std = @import("std");
     const testing = std.testing;
 
@@ -322,7 +308,6 @@ test "splitter 12" {
 }
 
 test "splitter 13" {
-    if (comptime !escape_outside_quotes) return error.SkipZigTest;
     const std = @import("std");
     const testing = std.testing;
 
@@ -331,7 +316,6 @@ test "splitter 13" {
 }
 
 test "splitter 14" {
-    if (comptime !escape_outside_quotes) return error.SkipZigTest;
     const std = @import("std");
     const testing = std.testing;
 
@@ -349,7 +333,6 @@ test "splitter 15" {
 }
 
 test "splitter 16" {
-    if (comptime !escape_outside_quotes) return error.SkipZigTest;
     const std = @import("std");
     const testing = std.testing;
 
@@ -358,7 +341,6 @@ test "splitter 16" {
 }
 
 test "splitter 17" {
-    if (comptime !escape_outside_quotes) return error.SkipZigTest;
     const std = @import("std");
     const testing = std.testing;
 
@@ -367,7 +349,6 @@ test "splitter 17" {
 }
 
 test "splitter 18" {
-    if (comptime !escape_outside_quotes) return error.SkipZigTest;
     const std = @import("std");
     const testing = std.testing;
 
@@ -437,47 +418,10 @@ test "splitter 24" {
 }
 
 test "splitter 25" {
-    if (comptime !escape_outside_quotes) return error.SkipZigTest;
     const std = @import("std");
     const testing = std.testing;
 
     var s: CommaSplitter = .init("a,\\u{10,df}");
     try testing.expectEqualStrings("a", (try s.next()).?);
     try testing.expectError(error.IllegalEscape, s.next());
-}
-
-// Windows-specific tests: backslash is literal outside quotes.
-
-test "splitter: windows paths" {
-    if (comptime escape_outside_quotes) return error.SkipZigTest;
-    const std = @import("std");
-    const testing = std.testing;
-
-    var s: CommaSplitter = .init("light:C:\\Users\\foo\\theme,dark:C:\\Users\\bar\\theme");
-    try testing.expectEqualStrings("light:C:\\Users\\foo\\theme", (try s.next()).?);
-    try testing.expectEqualStrings("dark:C:\\Users\\bar\\theme", (try s.next()).?);
-    try testing.expect(null == try s.next());
-}
-
-test "splitter: backslash literal outside quotes on windows" {
-    if (comptime escape_outside_quotes) return error.SkipZigTest;
-    const std = @import("std");
-    const testing = std.testing;
-
-    // Backslash followed by characters that would be escapes on Unix
-    // are treated as literal on Windows outside quotes.
-    var s: CommaSplitter = .init("\\n\\r\\t");
-    try testing.expectEqualStrings("\\n\\r\\t", (try s.next()).?);
-    try testing.expect(null == try s.next());
-}
-
-test "splitter: backslash still escapes inside quotes on windows" {
-    if (comptime escape_outside_quotes) return error.SkipZigTest;
-    const std = @import("std");
-    const testing = std.testing;
-
-    // Inside quotes, backslash escapes work on all platforms.
-    var s: CommaSplitter = .init("\"hello\\nworld\"");
-    try testing.expectEqualStrings("\"hello\\nworld\"", (try s.next()).?);
-    try testing.expect(null == try s.next());
 }

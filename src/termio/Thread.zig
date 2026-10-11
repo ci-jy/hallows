@@ -13,7 +13,6 @@ pub const Thread = @This();
 
 const std = @import("std");
 const ArenaAllocator = std.heap.ArenaAllocator;
-const builtin = @import("builtin");
 const global = @import("../global.zig");
 const xev = global.xev;
 const crash = @import("../crash/main.zig");
@@ -156,8 +155,7 @@ pub fn threadMain(self: *Thread, io: *termio.Termio) void {
         t.modes.set(.cursor_visible, false);
 
         // This is weird but just ensures that no matter what our underlying
-        // implementation we have the errors below. For example, Windows doesn't
-        // have "OpenptyFailed".
+        // implementation we have the errors below.
         const Err = @TypeOf(err) || error{
             OpenptyFailed,
             InputNotFound,
@@ -240,9 +238,7 @@ fn threadMain_(self: *Thread, io: *termio.Termio) !void {
     // Right now, on Darwin, `std.Thread.setName` can only name the current
     // thread, and we have no way to get the current thread from within it,
     // so instead we use this code to name the thread instead.
-    if (builtin.os.tag.isDarwin()) {
-        internal_os.macos.pthread_setname_np(&"io".*);
-    }
+    internal_os.macos.pthread_setname_np(&"io".*);
 
     // Setup our crash metadata
     crash.sentry.thread_state = .{

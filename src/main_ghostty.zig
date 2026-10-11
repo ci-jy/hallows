@@ -8,10 +8,7 @@ const posix = std.posix;
 const build_config = @import("build_config.zig");
 const macos = @import("macos");
 const cli = @import("cli.zig");
-const renderer = @import("renderer.zig");
-const apprt = @import("apprt.zig");
 
-const App = @import("App.zig");
 const Ghostty = @import("main_c.zig").Ghostty;
 const global = @import("global.zig");
 
@@ -74,44 +71,27 @@ pub fn main(minimal: std.process.Init.Minimal) !MainReturn {
         return;
     }
 
-    if (comptime build_config.app_runtime == .none) {
-        const stdout = std.io.getStdOut().writer();
-        try stdout.print("Usage: hallows +<action> [flags]\n\n", .{});
-        try stdout.print(
-            \\This is the Hallows helper CLI that accompanies the graphical Hallows app.
-            \\To launch the terminal directly, please launch the graphical app
-            \\(i.e. Hallows.app on macOS). This CLI can be used to perform various
-            \\actions such as inspecting the version, listing fonts, etc.
-            \\
-            \\On macOS, the terminal can also be launched using `open -na Hallows.app`,
-            \\or `open -na Hallows.app --args --foo=bar --baz=qux` to pass arguments.
-            \\
-            \\We don't have proper help output yet, sorry! Please refer to the
-            \\source code or Discord community for help for now. We'll fix this in time.
-            \\
-        ,
-            .{},
-        );
+    // Without an action, the CLI only prints usage. The terminal itself
+    // is the macOS app.
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Usage: hallows +<action> [flags]\n\n", .{});
+    try stdout.print(
+        \\This is the Hallows helper CLI that accompanies the graphical Hallows app.
+        \\To launch the terminal directly, please launch the graphical app
+        \\(i.e. Hallows.app on macOS). This CLI can be used to perform various
+        \\actions such as inspecting the version, listing fonts, etc.
+        \\
+        \\On macOS, the terminal can also be launched using `open -na Hallows.app`,
+        \\or `open -na Hallows.app --args --foo=bar --baz=qux` to pass arguments.
+        \\
+        \\We don't have proper help output yet, sorry! Please refer to the
+        \\source code or Discord community for help for now. We'll fix this in time.
+        \\
+    ,
+        .{},
+    );
 
-        std.process.exit(0);
-    }
-
-    // Create our app state
-    const app: *App = try App.create(alloc);
-    defer app.destroy();
-
-    // Create our runtime app
-    var app_runtime: apprt.App = undefined;
-    try app_runtime.init(app, .{});
-    defer app_runtime.terminate();
-
-    // Since - by definition - there are no surfaces when first started, the
-    // quit timer may need to be started. The start timer will get cancelled if/
-    // when the first surface is created.
-    if (@hasDecl(apprt.App, "startQuitTimer")) app_runtime.startQuitTimer();
-
-    // Run the GUI event loop
-    try app_runtime.run();
+    std.process.exit(0);
 }
 
 // The function std.log will call.
@@ -127,7 +107,6 @@ fn logFn(
     //
     // macOS logging is thread safe so no need for locks/mutexes
     macos: {
-        if (comptime !builtin.target.os.tag.isDarwin()) break :macos;
         if (!global.logging().macos) break :macos;
 
         const prefix = if (scope == .default) "" else @tagName(scope) ++ ": ";
@@ -212,23 +191,7 @@ pub const std_options: std.Options = .{
 
     .logFn = logFn,
 
-    // If are building for a non-MacOS Darwin target (e.g., iOS), we need to
-    // disable stack tracing for the time being. This is due to the fact that
-    // Zig switched to using _dyld_get_image_header_containing_address and some
-    // other (deprecated) calls to speed up stack unwinding; these calls are
-    // available on MacOS, but not on other platforms.
-    //
-    // A fix has already been submitted to exempt non-MacOS (but still Darwin)
-    // targets, so this can likely be removed in Zig 0.17.0, or a 0.16.x patch
-    // version if it releases beforehand.
-    //
-    // More details:
-    //   https://codeberg.org/ziglang/zig/commit/89f86e46d278a35a613bbc662cdd3f65ffc76ed7
-    //
-    .allow_stack_tracing = if (builtin.target.os.tag.isDarwin() and builtin.target.os.tag != .macos)
-        false
-    else
-        !builtin.strip_debug_info,
+    .allow_stack_tracing = !builtin.strip_debug_info,
 };
 
 test {

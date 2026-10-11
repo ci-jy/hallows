@@ -26,7 +26,7 @@ Write commit messages that follow commit style guidelines for the project.
 - **Subsystem prefix**: Use a short, lowercase identifier for the
   area of code changed (e.g., `terminal`, `vt`, `lib`, `config`,
   `font`). Determine this from the file paths in the diff. If
-  changes span the macOS app, use `macos`. For GTK, use `gtk`. For
+  changes span the macOS app, use `macos`. For
   build system, use `build`. Use nested subsystems with `/` when
   helpful and exclusive (e.g., `terminal/osc`).
 - **Summary**: Lowercase start (not capitalized), imperative mood,

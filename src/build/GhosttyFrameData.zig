@@ -3,17 +3,14 @@
 const GhosttyFrameData = @This();
 
 const std = @import("std");
-const DistResource = @import("GhosttyDist.zig").Resource;
 
 /// The output path for the compressed framedata zig file
 output: std.Build.LazyPath,
 
 pub fn init(b: *std.Build) !GhosttyFrameData {
-    const dist = distResources(b);
-
     // Generate the Zig source file that embeds the compressed data
     const wf = b.addWriteFiles();
-    _ = wf.addCopyFile(dist.framedata.path(b), "framedata.compressed");
+    _ = wf.addCopyFile(framedata(b), "framedata.compressed");
     const zig_file = wf.add("framedata.zig",
         \\//! This file is auto-generated. Do not edit.
         \\
@@ -32,10 +29,8 @@ pub fn addImport(self: *const GhosttyFrameData, step: *std.Build.Step.Compile) v
     });
 }
 
-/// Creates the framedata resources that can be prebuilt for our dist build.
-pub fn distResources(b: *std.Build) struct {
-    framedata: DistResource,
-} {
+/// Compresses the animation frames.
+fn framedata(b: *std.Build) std.Build.LazyPath {
     const exe = b.addExecutable(.{
         .name = "framegen",
         .root_module = b.createModule(.{
@@ -48,28 +43,14 @@ pub fn distResources(b: *std.Build) struct {
         .flags = &.{},
     });
 
-    if (b.systemIntegrationOption("zlib", .{})) {
-        exe.root_module.linkSystemLibrary("zlib", .{
-            .preferred_link_mode = .dynamic,
-            .search_strategy = .mode_first,
-        });
-    } else {
-        if (b.lazyDependency("zlib", .{
-            .target = b.graph.host,
-            .optimize = .ReleaseFast,
-        })) |zlib_dep| {
-            exe.root_module.linkLibrary(zlib_dep.artifact("z"));
-        }
+    if (b.lazyDependency("zlib", .{
+        .target = b.graph.host,
+        .optimize = .ReleaseFast,
+    })) |zlib_dep| {
+        exe.root_module.linkLibrary(zlib_dep.artifact("z"));
     }
 
     const run = b.addRunArtifact(exe);
     run.addDirectoryArg(b.path("src/build/framegen/frames"));
-    const compressed_file = run.addOutputFileArg("framedata.compressed");
-
-    return .{
-        .framedata = .{
-            .dist = "src/build/framegen/framedata.compressed",
-            .generated = compressed_file,
-        },
-    };
+    return run.addOutputFileArg("framedata.compressed");
 }

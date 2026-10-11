@@ -61,19 +61,8 @@ const c = @import("posix_c");
 pub const compatibility = std.StaticStringMap(
     cli.CompatibilityHandler(Config),
 ).initComptime(&.{
-    // Ghostty 1.1 introduced background-blur support for Linux which
-    // doesn't support a specific radius value. The renaming is to let
-    // one field be used for both platforms (macOS retained the ability
-    // to set a radius).
+    // Ghostty 1.1 renamed `background-blur-radius` to `background-blur`.
     .{ "background-blur-radius", cli.compatibilityRenamed(Config, "background-blur") },
-
-    // Ghostty 1.2 renamed all our adw options to gtk because we now have
-    // a hard dependency on libadwaita.
-    .{ "adw-toolbar-style", cli.compatibilityRenamed(Config, "gtk-toolbar-style") },
-
-    // Ghostty 1.2 removed the `hidden` value from `gtk-tabs-location` and
-    // moved it to `window-show-tab-bar`.
-    .{ "gtk-tabs-location", compatGtkTabsLocation },
 
     // Ghostty 1.2 lets you set `cell-foreground` and `cell-background`
     // to match the cell foreground and background colors, respectively.
@@ -85,10 +74,6 @@ pub const compatibility = std.StaticStringMap(
     // Ghostty 1.2 merged `bold-is-bright` into the new `bold-color`
     // by setting the value to "bright".
     .{ "bold-is-bright", compatBoldIsBright },
-
-    // Ghostty 1.2 removed the "desktop" option and renamed it to "detect".
-    // The semantics also changed slightly but this is the correct mapping.
-    .{ "gtk-single-instance", compatGtkSingleInstance },
 
     // Ghostty 1.3 rename the "window" option to "new-window".
     // See: https://github.com/ghostty-org/ghostty/pull/9764
@@ -105,26 +90,6 @@ pub const compatibility = std.StaticStringMap(
     .{ "copy-on-select", compatCopyOnSelect },
 });
 
-/// Set Hallows' graphical user interface language to a language other than the
-/// system default language. For example:
-///
-///     language = de
-///
-/// will force the strings in Hallows' graphical user interface to be in German
-/// rather than the system default.
-///
-/// This will not affect the language used by programs run _within_ Hallows.
-/// Those will continue to use the default system language. There are also many
-/// non-GUI elements in Hallows that are not translated - this setting will have
-/// no effect on those.
-///
-/// Warning: This setting cannot be reloaded at runtime. To change the language
-/// you must fully restart Hallows.
-///
-/// GTK only.
-/// Available since 1.3.0.
-language: ?[:0]const u8 = null,
-
 /// The font families to use.
 ///
 /// You can generate the list of valid values using the CLI:
@@ -136,8 +101,8 @@ language: ?[:0]const u8 = null,
 /// font. This is particularly useful for multiple languages, symbolic fonts,
 /// etc.
 ///
-/// Notes on emoji specifically: On macOS, Hallows by default will always use
-/// Apple Color Emoji and on Linux will always use Noto Emoji. You can
+/// Notes on emoji specifically: Hallows by default will always use
+/// Apple Color Emoji. You can
 /// override this behavior by specifying a font family here that contains
 /// emoji glyphs.
 ///
@@ -263,16 +228,7 @@ language: ?[:0]const u8 = null,
 /// adjusted their font size will retain their manually adjusted size.
 /// Otherwise, the font size of existing terminals will be updated on
 /// reload.
-///
-/// On Linux with GTK, font size is scaled according to both display-wide and
-/// text-specific scaling factors, which are often managed by your desktop
-/// environment (e.g. the GNOME display scale and large text settings).
-@"font-size": f32 = switch (builtin.os.tag) {
-    // On macOS we default a little bigger since this tends to look better. This
-    // is purely subjective but this is easy to modify.
-    .macos => 13,
-    else => 12,
-},
+@"font-size": f32 = 13,
 
 /// A repeatable configuration to set one or more font variations values for
 /// a variable font. A variable font is a single font, usually with a filename
@@ -385,13 +341,12 @@ language: ?[:0]const u8 = null,
 /// This affects the appearance of text and of any images with transparency.
 /// Additionally, custom shaders will receive colors in the configured space.
 ///
-/// On macOS the default is `native`, on all other platforms the default is
-/// `linear-corrected`.
+/// The default is `native`.
 ///
 /// Valid values:
 ///
 /// * `native` - Perform alpha blending in the native color space for the OS.
-///   On macOS this corresponds to Display P3, and on Linux it's sRGB.
+///   This corresponds to Display P3.
 ///
 /// * `linear` - Perform alpha blending in linear space. This will eliminate
 ///   the darkening artifacts around the edges of text that are very visible
@@ -404,11 +359,7 @@ language: ?[:0]const u8 = null,
 ///   but without any of the darkening artifacts.
 ///
 /// Available since: 1.1.0
-@"alpha-blending": AlphaBlending =
-    if (builtin.os.tag == .macos)
-        .native
-    else
-        .@"linear-corrected",
+@"alpha-blending": AlphaBlending = .native,
 
 /// All of the configurations behavior adjust various metrics determined by the
 /// font. The values can be integers (1, -1, etc.) or a percentage (20%, -15%,
@@ -519,9 +470,9 @@ language: ?[:0]const u8 = null,
 /// explicitly disable flags you don't want. You can also use `true` or `false`
 /// to turn all flags on or off.
 ///
-/// This configuration only applies to Hallows builds that use FreeType.
-/// This is usually the case only for Linux builds. macOS uses CoreText
-/// and does not have an equivalent configuration.
+/// This configuration only applies to Hallows builds that use FreeType
+/// (the `coretext_freetype` font backend). The default CoreText backend
+/// does not have an equivalent configuration.
 ///
 /// Available flags:
 ///
@@ -537,8 +488,7 @@ language: ?[:0]const u8 = null,
 ///   * `autohint` - Enable the freetype auto-hinter. Enabled by default.
 ///
 ///   * `light` - Use a light hinting style, better preserving glyph shapes.
-///     This is the most common setting in GTK apps and therefore also Hallows'
-///     default. This has no effect if `monochrome` is enabled. Enabled by
+///     This is Hallows' default. This has no effect if `monochrome` is enabled. Enabled by
 ///     default.
 ///
 /// Example: `hinting`, `no-hinting`, `force-autohint`, `no-force-autohint`
@@ -854,8 +804,8 @@ palette: Palette = .{ .value = Palette.hallows },
 /// Fixed in Hallows: this can't be changed because Hallows has one
 /// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// How to blur the translucent background, fixed at `true`, a standard blur
-/// (on Linux only where the compositor supports it). On macOS 26 and later,
+/// How to blur the translucent background, fixed at `true`, a standard blur.
+/// On macOS 26 and later,
 /// the terminal panes are Liquid Glass panels floating over this blur.
 @"background-blur": BackgroundBlur = .true,
 
@@ -973,12 +923,8 @@ command: ?Command = null,
 ///     be shell-expanded by the upstream (e.g. the shell used to type in
 ///     the `hallows -e` command).
 ///
-///   * `gtk-single-instance=false` - This ensures that a new instance is
-///     launched and the CLI args are respected.
-///
 ///   * `quit-after-last-window-closed=true` - This ensures that the Hallows
-///     process will exit when the command exits. Additionally, the
-///     `quit-after-last-window-closed-delay` is unset.
+///     process will exit when the command exits.
 ///
 ///   * `shell-integration=detect` (if not `none`) - This prevents forcibly
 ///     injecting any configured shell integration into the command's
@@ -1002,10 +948,6 @@ command: ?Command = null,
 /// Command finished notifications requires that either shell integration is
 /// enabled, or that your shell sends OSC 133 escape sequences to mark the start
 /// and end of commands.
-///
-/// On GTK, there is a context menu item that will enable command finished
-/// notifications for a single command, overriding the `never` and `unfocused`
-/// options.
 ///
 /// Available since 1.3.0.
 @"notify-on-command-finish": NotifyOnCommandFinish = .never,
@@ -1154,9 +1096,8 @@ input: RepeatableReadableIO = .{},
 /// to be abnormal. This is used to show an error message when the process exits
 /// too quickly.
 ///
-/// On Linux, this must be paired with a non-zero exit code. On macOS, we allow
-/// any exit code because of the way shell processes are launched via the login
-/// command.
+/// We allow any exit code because of the way shell processes are launched via
+/// the login command.
 @"abnormal-command-exit-runtime": u32 = 250,
 
 /// The size of the scrollback buffer in bytes. This also includes the active
@@ -1262,8 +1203,7 @@ scrollbar: Scrollbar = .system,
 /// TODO: This can't currently be set!
 link: RepeatableLink = .{},
 
-/// Enable URL matching. URLs are matched on hover with control (Linux) or
-/// command (macOS) pressed and open using the default system application for
+/// Enable URL matching. URLs are matched on hover with command pressed and open using the default system application for
 /// the linked URL.
 ///
 /// The URL matcher is always lowest priority of any configured links (see
@@ -1337,36 +1277,6 @@ fullscreen: Fullscreen = .false,
 /// to get the new title.
 title: ?[:0]const u8 = null,
 
-/// The setting that will change the application class value.
-///
-/// This controls the class field of the `WM_CLASS` X11 property (when running
-/// under X11), the Wayland application ID (when running under Wayland), and the
-/// bus name that Hallows uses to connect to DBus.
-///
-/// Note that changing this value between invocations will create new, separate
-/// instances, of Hallows when running with `gtk-single-instance=true`. See that
-/// option for more details.
-///
-/// Changing this value may break launching Hallows from `.desktop` files, via
-/// DBus activation, or systemd user services as the system is expecting Hallows
-/// to connect to DBus using the default `class` when it is launched.
-///
-/// The class name must follow the requirements defined [in the GTK
-/// documentation](https://docs.gtk.org/gio/type_func.Application.id_is_valid.html).
-///
-/// The default is `com.mitchellh.ghostty`.
-///
-/// This only affects GTK builds.
-class: ?[:0]const u8 = null,
-
-/// This controls the instance name field of the `WM_CLASS` X11 property when
-/// running under X11. It has no effect otherwise.
-///
-/// The default is `ghostty`.
-///
-/// This only affects GTK builds.
-@"x11-instance-name": ?[:0]const u8 = null,
-
 /// The directory to change to after starting the command.
 ///
 /// This setting is secondary to the `window-inherit-working-directory`
@@ -1375,10 +1285,8 @@ class: ?[:0]const u8 = null,
 /// setting will be used. Typically, this setting is used only for the first
 /// window.
 ///
-/// The default is `inherit` except in special scenarios listed next. On macOS,
-/// if Hallows can detect it is launched from launchd (double-clicked) or
-/// `open`, then it defaults to `home`. On Linux with GTK, if Hallows can detect
-/// it was launched from a desktop launcher, then it defaults to `home`.
+/// The default is `inherit` except if Hallows can detect it is launched from
+/// launchd (double-clicked) or `open`, then it defaults to `home`.
 ///
 /// The value of this must be an absolute path, a path prefixed with `~/`
 /// (the tilde will be expanded to the user's home directory), or
@@ -1562,7 +1470,7 @@ class: ?[:0]const u8 = null,
 ///    Note: this does not work in all environments; see the additional notes
 ///    below for more information.
 ///
-///    Available since: 1.0.0 on macOS, 1.2.0 on GTK
+///    Available since: 1.0.0
 ///
 ///  * `unconsumed:`
 ///
@@ -1604,47 +1512,12 @@ class: ?[:0]const u8 = null,
 /// `global:unconsumed:ctrl+a=reload_config` will make the keybind global
 /// and not consume the input to reload the config.
 ///
-/// On macOS, this feature requires accessibility permissions to be granted
+/// This feature requires accessibility permissions to be granted
 /// to Hallows. When a `global:` keybind is specified and Hallows is launched
 /// or reloaded, Hallows will attempt to request these permissions.
-/// If the permissions are not granted, the keybind will not work. On macOS,
-/// you can find these permissions in System Preferences -> Privacy & Security
+/// If the permissions are not granted, the keybind will not work. You can
+/// find these permissions in System Preferences -> Privacy & Security
 /// -> Accessibility.
-///
-/// Since Hallows 1.4.0, global shortcuts on Linux are primarily supported
-/// through the [`vicinae-hotkey-v1`](https://github.com/vicinaehq/vicinae-wayland-protocols/tree/main/staging/vicinae-hotkey)
-/// protocol, available out-of-the-box with the following Wayland compositors
-/// and desktop environments:
-///
-///   - Hyprland since version 0.56.0
-///
-/// On X11 or when your Wayland compositor/desktop environment does not
-/// support `vicinae-hotkey-v1`, the much more widely-used
-/// [XDG Global Shortcuts](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.GlobalShortcuts.html)
-/// protocol is used instead.
-///
-/// Note: XDG Global Shortcuts rely on a functional XDG Desktop Portal
-/// implementation **that is designed to be used with your desktop environment
-/// or compositor**. Please make sure that you have the correct one installed.
-///
-/// Desktop environments that are known to support the XDG Global Shortcuts
-/// protocol include:
-///
-///  - KDE Plasma since [5.27](https://kde.org/announcements/plasma/5/5.27.0/#wayland)
-///    with `xdg-desktop-portal-kde` installed
-///
-///  - GNOME since [48](https://release.gnome.org/48/#and-thats-not-all) with
-///    `xdg-desktop-portal-gnome` installed
-///
-///  - Hyprland before version 0.56.0, with `xdg-desktop-portal-hyprland`
-///    installed. **Some manual configuration is required.** Consult the steps
-///    outlined on the [Hyprland Wiki](https://wiki.hypr.land/Configuring/Basics/Binds/#dbus-global-shortcuts)
-///    to set up D-Bus-based global shortcuts correctly.
-///
-/// Desktop environments and compositors that don't implement either protocol
-/// do not support global shortcuts, like wlroots-based compositors e.g. Sway
-/// (see [upstream issue](https://github.com/emersion/xdg-desktop-portal-wlr/issues/240))
-/// and COSMIC.
 ///
 /// ## Chained Actions
 ///
@@ -1929,13 +1802,8 @@ keybind: Keybinds = .{},
 ///
 ///  * `server`
 ///
-///    Prefer server-side decorations. This is only relevant on Linux with GTK,
-///    either on X11, or Wayland on a compositor that supports the
-///    `org_kde_kwin_server_decoration` protocol (e.g. KDE Plasma, but almost
-///    any non-GNOME desktop supports this protocol).
-///
-///    If `server` is set but the environment doesn't support server-side
-///    decorations, client-side decorations will be used instead.
+///    Prefer server-side decorations. macOS doesn't differentiate between
+///    client and server-side decorations, so this is the same as `auto`.
 ///
 ///    Available since: 1.1.0
 ///
@@ -1944,12 +1812,6 @@ keybind: Keybinds = .{},
 /// For the sake of backwards compatibility and convenience, this setting also
 /// accepts boolean true and false values. If set to `true`, this is equivalent
 /// to `auto`. If set to `false`, this is equivalent to `none`.
-/// This is convenient for users who live primarily on systems that don't
-/// differentiate between client and server-side decorations (e.g. macOS and
-/// Windows).
-///
-/// The "toggle_window_decorations" keybind action can be used to create
-/// a keybinding to toggle this setting at runtime.
 ///
 /// macOS: To hide the titlebar without removing the native window borders
 ///        or rounded corners, use `macos-titlebar-style = hidden` instead.
@@ -1962,19 +1824,8 @@ keybind: Keybinds = .{},
 /// Note: any font available on the system may be used, this font is not
 /// required to be a fixed-width font.
 ///
-/// Available since: 1.0.0 on macOS, 1.1.0 on GTK
+/// Available since: 1.0.0
 @"window-title-font-family": ?[:0]const u8 = null,
-
-/// The text that will be displayed in the subtitle of the window. Valid values:
-///
-///   * `false` - Disable the subtitle.
-///   * `working-directory` - Set the subtitle to the working directory of the
-///      surface.
-///
-/// This feature is only supported on GTK.
-///
-/// Available since: 1.1.0
-@"window-subtitle": WindowSubtitle = .false,
 
 /// Fixed in Hallows: this can't be changed because Hallows has one
 /// fixed look. Setting it shows a configuration warning and is ignored.
@@ -2016,11 +1867,6 @@ keybind: Keybinds = .{},
 /// value will not affect the size of the window after it has been created. This
 /// is only used for the initial size.
 ///
-/// BUG: On Linux with GTK, the calculated window size will not properly take
-/// into account window decorations. As a result, the grid dimensions will not
-/// exactly match this configuration. If window decorations are disabled (see
-/// `window-decoration`), then this will work as expected.
-///
 /// Windows smaller than 10 wide by 4 high are not allowed.
 @"window-height": u32 = 0,
 @"window-width": u32 = 0,
@@ -2041,13 +1887,9 @@ keybind: Keybinds = .{},
 /// Invalid positions are runtime-specific, but generally the positions are
 /// clamped to the nearest valid position.
 ///
-/// On macOS, the window position is relative to the top-left corner of
-/// the visible screen area. This means that if the menu bar is visible, the
-/// window will be placed below the menu bar.
-///
-/// Note: this is only supported on macOS. The GTK runtime does not support
-/// setting the window position, as windows are only allowed position
-/// themselves in X11 and not Wayland.
+/// The window position is relative to the top-left corner of the visible
+/// screen area. This means that if the menu bar is visible, the window will
+/// be placed below the menu bar.
 @"window-position-x": ?i16 = null,
 @"window-position-y": ?i16 = null,
 
@@ -2080,12 +1922,10 @@ keybind: Keybinds = .{},
 ///
 /// The default value is `default`.
 ///
-/// This is currently only supported on macOS. This has no effect on Linux.
 @"window-save-state": WindowSaveState = .default,
 
 /// Resize the window in discrete increments of the focused surface's cell size.
-/// If this is disabled, surfaces are resized in pixel increments. Currently
-/// only supported on macOS.
+/// If this is disabled, surfaces are resized in pixel increments.
 @"window-step-resize": bool = false,
 
 /// The position where new tabs are created. Valid values:
@@ -2095,43 +1935,6 @@ keybind: Keybinds = .{},
 ///
 ///   * `end` - Insert the new tab at the end of the tab list.
 @"window-new-tab-position": WindowNewTabPosition = .current,
-
-/// Whether to show the tab bar.
-///
-/// Valid values:
-///
-///  - `always`
-///
-///    Always display the tab bar, even when there's only one tab.
-///
-///    Available since: 1.2.0
-///
-///  - `auto` *(default)*
-///
-///    Automatically show and hide the tab bar. The tab bar is only
-///    shown when there are two or more tabs present.
-///
-///  - `never`
-///
-///    Never show the tab bar. Tabs are only accessible via the tab
-///    overview or by keybind actions.
-///
-/// Currently only supported on Linux (GTK).
-@"window-show-tab-bar": WindowShowTabBar = .auto,
-
-/// Background color for the window titlebar. This only takes effect if
-/// window-theme is set to ghostty. Currently only supported in the GTK app
-/// runtime.
-///
-/// Specified as either hex (`#RRGGBB` or `RRGGBB`) or a named X11 color.
-@"window-titlebar-background": ?Color = null,
-
-/// Foreground color for the window titlebar. This only takes effect if
-/// window-theme is set to ghostty. Currently only supported in the GTK app
-/// runtime.
-///
-/// Specified as either hex (`#RRGGBB` or `RRGGBB`) or a named X11 color.
-@"window-titlebar-foreground": ?Color = null,
 
 /// Controls when drag handles are shown over splits,
 /// allowing splits to be rearranged with mouse controls.
@@ -2146,10 +1949,7 @@ keybind: Keybinds = .{},
 ///
 ///    Automatically show and hide the drag handle.
 ///
-///    On Linux, the handle is only shown when there are two or
-///    more splits present.
-///
-///    On macOS, the handle is only hidden when there's one split
+///    The handle is only hidden when there's one split
 ///    in **fullscreen** mode, otherwise it's shown when hovered.
 ///
 ///  - `never`
@@ -2311,23 +2111,18 @@ keybind: Keybinds = .{},
 ///
 /// * `none` - Do not copy selected text automatically.
 ///
-/// * `primary` - On Linux, copy to the selection clipboard only. This has no
-///   effect on macOS. (Available since: 1.4.0)
+/// * `primary` - Copy to the selection clipboard only. macOS has no
+///   selection clipboard, so this has no effect. (Available since: 1.4.0)
 ///
 /// * `clipboard` - Copy text to the system clipboard only.
 ///
-/// * `both` - Copy to both clipboards on Linux, and only the system clipboard
-///   on macOS. (Available since: 1.4.0)
+/// * `both` - Copy to the system clipboard. (Available since: 1.4.0)
 ///
 /// For backward compatibility and convenience, a value of `true` is the same as
-/// `primary` on Linux and `clipboard` on macOS, and `false` is an alias for
-/// `none`.
+/// `clipboard`, and `false` is an alias for `none`.
 ///
-/// The default value is `primary` on Linux and `none` otherwise.
-@"copy-on-select": CopyOnSelect = switch (builtin.os.tag) {
-    .linux => .primary,
-    else => .none,
-},
+/// The default value is `none`.
+@"copy-on-select": CopyOnSelect = .none,
 
 /// The action to take when the user right-clicks on the terminal surface.
 ///
@@ -2345,8 +2140,8 @@ keybind: Keybinds = .{},
 /// The action to take when the user middle-clicks on the terminal surface.
 ///
 /// Valid values:
-///   * `primary-paste` - Paste from the selection clipboard on Linux.
-///      Does nothing on macOS.
+///   * `primary-paste` - Paste from the selection clipboard. macOS has no
+///      selection clipboard, so this does nothing.
 ///   * `clipboard-paste` - Paste from the system clipboard.
 ///   * `ignore` - Do nothing, ignore the middle click.
 ///
@@ -2411,61 +2206,12 @@ keybind: Keybinds = .{},
 
 /// Whether or not to quit after the last surface is closed.
 ///
-/// This defaults to `false` on macOS since that is standard behavior for
-/// a macOS application. On Linux, this defaults to `true` since that is
-/// generally expected behavior.
-///
-/// On Linux, if this is `true`, Hallows can delay quitting fully until a
-/// configurable amount of time has passed after the last window is closed.
-/// See the documentation of `quit-after-last-window-closed-delay`.
-@"quit-after-last-window-closed": bool = builtin.os.tag == .linux,
-
-/// Controls how long Hallows will stay running after the last open surface has
-/// been closed. This only has an effect if `quit-after-last-window-closed` is
-/// also set to `true`.
-///
-/// The minimum value for this configuration is `1s`. Any values lower than
-/// this will be clamped to `1s`.
-///
-/// The duration is specified as a series of numbers followed by time units.
-/// Whitespace is allowed between numbers and units. Each number and unit will
-/// be added together to form the total duration.
-///
-/// The allowed time units are as follows:
-///
-///   * `y` - 365 SI days, or 8760 hours, or 31536000 seconds. No adjustments
-///     are made for leap years or leap seconds.
-///   * `d` - one SI day, or 86400 seconds.
-///   * `h` - one hour, or 3600 seconds.
-///   * `m` - one minute, or 60 seconds.
-///   * `s` - one second.
-///   * `ms` - one millisecond, or 0.001 second.
-///   * `us` or `µs` - one microsecond, or 0.000001 second.
-///   * `ns` - one nanosecond, or 0.000000001 second.
-///
-/// Examples:
-///   * `1h30m`
-///   * `45s`
-///
-/// Units can be repeated and will be added together. This means that
-/// `1h1h` is equivalent to `2h`. This is confusing and should be avoided.
-/// A future update may disallow this.
-///
-/// The maximum value is `584y 49w 23h 34m 33s 709ms 551µs 615ns`. Any
-/// value larger than this will be clamped to the maximum value.
-///
-/// By default `quit-after-last-window-closed-delay` is unset and
-/// Hallows will quit immediately after the last window is closed if
-/// `quit-after-last-window-closed` is `true`.
-///
-/// Only implemented on Linux.
-@"quit-after-last-window-closed-delay": ?Duration = null,
+/// This defaults to `false` since that is standard behavior for a macOS
+/// application.
+@"quit-after-last-window-closed": bool = false,
 
 /// This controls whether an initial window is created when Hallows
-/// is run. Note that if `quit-after-last-window-closed` is `true` and
-/// `quit-after-last-window-closed-delay` is set, setting `initial-window` to
-/// `false` will mean that Hallows will quit after the configured delay if no
-/// window is ever created. Only implemented on Linux and macOS.
+/// is run.
 @"initial-window": bool = true,
 
 /// The duration that undo operations remain available. After this
@@ -2508,10 +2254,6 @@ keybind: Keybinds = .{},
 /// Units can be repeated and will be added together. This means that
 /// `1h1h` is equivalent to `2h`. This is confusing and should be avoided.
 /// A future update may disallow this.
-///
-/// This configuration is only supported on macOS. Linux doesn't
-/// support undo operations at all so this configuration has no
-/// effect.
 ///
 /// Available since: 1.2.0
 @"undo-timeout": Duration = .{ .duration = 5 * std.time.ns_per_s },
@@ -2558,44 +2300,6 @@ keybind: Keybinds = .{},
 /// Available since: 1.2.0
 @"quick-terminal-size": QuickTerminalSize = .{},
 
-/// The layer of the quick terminal window. The higher the layer,
-/// the more windows the quick terminal may conceal.
-///
-/// Valid values are:
-///
-///  * `overlay`
-///
-///    The quick terminal appears in front of all windows.
-///
-///  * `top` (default)
-///
-///    The quick terminal appears in front of normal windows but behind
-///    fullscreen overlays like lock screens.
-///
-///  * `bottom`
-///
-///    The quick terminal appears behind normal windows but in front of
-///    wallpapers and other windows in the background layer.
-///
-///  * `background`
-///
-///    The quick terminal appears behind all windows.
-///
-/// GTK Wayland only.
-///
-/// Available since: 1.2.0
-@"gtk-quick-terminal-layer": QuickTerminalLayer = .top,
-/// The namespace for the quick terminal window.
-///
-/// This is an identifier that is used by the Wayland compositor and/or
-/// scripts to determine the type of layer surfaces and to possibly apply
-/// unique effects.
-///
-/// GTK Wayland only.
-///
-/// Available since: 1.2.0
-@"gtk-quick-terminal-namespace": [:0]const u8 = "ghostty-quick-terminal",
-
 /// The screen where the quick terminal should show up.
 ///
 /// Valid values are:
@@ -2615,35 +2319,18 @@ keybind: Keybinds = .{},
 /// The default value is `main` because this is the recommended screen
 /// by the operating system.
 ///
-/// On macOS, `macos-menu-bar` uses the screen containing the menu bar.
-/// On Linux/Wayland, `macos-menu-bar` is treated as equivalent to `main`.
-///
-/// Note: On Linux, there is no universal concept of a "primary" monitor.
-/// Hallows uses the compositor-reported primary output when available and
-/// falls back to the first monitor reported by GDK if no primary output can
-/// be resolved.
 @"quick-terminal-screen": QuickTerminalScreen = .main,
 
 /// Duration (in seconds) of the quick terminal enter and exit animation.
 /// Set it to 0 to disable animation completely. This can be changed at
 /// runtime.
-///
-/// Only implemented on macOS.
 @"quick-terminal-animation-duration": f64 = 0.2,
 
 /// Automatically hide the quick terminal when focus shifts to another window.
 /// Set it to false for the quick terminal to remain open even when it loses focus.
 ///
-/// Defaults to true on macOS and on false on Linux/BSD. This is because global
-/// shortcuts on Linux require system configuration and are considerably less
-/// accessible than on macOS, meaning that it is more preferable to keep the
-/// quick terminal open until the user has completed their task.
-/// This default may change in the future.
-@"quick-terminal-autohide": bool = switch (builtin.os.tag) {
-    .linux => false,
-    .macos => true,
-    else => false,
-},
+/// Defaults to true.
+@"quick-terminal-autohide": bool = true,
 
 /// This configuration option determines the behavior of the quick terminal
 /// when switching between macOS spaces. macOS spaces are virtual desktops
@@ -2661,41 +2348,8 @@ keybind: Keybinds = .{},
 ///
 /// The default value is `move`.
 ///
-/// Only implemented on macOS.
-/// On Linux the behavior is always equivalent to `move`.
-///
 /// Available since: 1.1.0
 @"quick-terminal-space-behavior": QuickTerminalSpaceBehavior = .move,
-
-/// Determines under which circumstances that the quick terminal should receive
-/// keyboard input. See the corresponding [Wayland documentation](https://wayland.app/protocols/wlr-layer-shell-unstable-v1#zwlr_layer_surface_v1:enum:keyboard_interactivity)
-/// for a more detailed explanation of the behavior of each option.
-///
-/// > [!NOTE]
-/// > The exact behavior of each option may differ significantly across
-/// > compositors -- experiment with them on your system to find one that
-/// > suits your liking!
-///
-/// Valid values are:
-///
-///  * `none`
-///
-///    The quick terminal will not receive any keyboard input.
-///
-///  * `on-demand` (default)
-///
-///    The quick terminal would only receive keyboard input when it is focused.
-///
-///  * `exclusive`
-///
-///    The quick terminal will always receive keyboard input, even when another
-///    window is currently focused.
-///
-/// Only has an effect on Linux Wayland.
-/// On macOS the behavior is always equivalent to `on-demand`.
-///
-/// Available since: 1.2.0
-@"quick-terminal-keyboard-interactivity": QuickTerminalKeyboardInteractivity = .@"on-demand",
 
 /// Whether to enable shell integration auto-injection or not. Shell integration
 /// greatly enhances the terminal experience by enabling a number of features:
@@ -3070,11 +2724,7 @@ keybind: Keybinds = .{},
 ///
 ///    Instruct the system to notify the user using built-in system functions.
 ///    This could result in an audiovisual effect, a notification, or something
-///    else entirely. Changing these effects require altering system settings:
-///    for instance under the "Sound > Alert Sound" setting in GNOME,
-///    or the "Accessibility > System Bell" settings in KDE Plasma.
-///
-///    On macOS, this plays the system alert sound.
+///    else entirely. This plays the system alert sound.
 ///
 ///  * `audio`
 ///
@@ -3083,19 +2733,7 @@ keybind: Keybinds = .{},
 ///  * `attention` *(enabled by default)*
 ///
 ///    Request the user's attention when Hallows is unfocused, until it has
-///    received focus again. On macOS, this will bounce the app icon in the
-///    dock once. On Linux, the behavior depends on the desktop environment
-///    and/or the window manager/compositor:
-///
-///    - On KDE, the background of the desktop icon in the task bar would be
-///      highlighted;
-///
-///    - On GNOME, you may receive a notification that, when clicked, would
-///      bring the Hallows window into focus;
-///
-///    - On Sway, the window may be decorated with a distinctly colored border;
-///
-///    - On other systems this may have no effect at all.
+///    received focus again. This will bounce the app icon in the dock once.
 ///
 ///  * `title` *(enabled by default)*
 ///
@@ -3107,7 +2745,7 @@ keybind: Keybinds = .{},
 ///    Display a border around the alerted surface until the terminal is
 ///    re-focused or interacted with (such as on keyboard input).
 ///
-///    Available since: 1.2.0 on GTK, 1.2.1 on macOS
+///    Available since: 1.2.1
 ///
 /// Example: `audio`, `no-audio`, `system`, `no-system`
 ///
@@ -3120,44 +2758,15 @@ keybind: Keybinds = .{},
 /// directory if this is used as a CLI flag. The path may be prefixed with `~/`
 /// to reference the user's home directory.
 ///
-/// Available since: 1.2.0 on GTK, 1.3.0 on macOS.
+/// Available since: 1.3.0
 @"bell-audio-path": ?Path = null,
 
 /// If `audio` is an enabled bell feature, this is the volume to play the audio
 /// file at (relative to the system volume). This is a floating point number
 /// ranging from 0.0 (silence) to 1.0 (as loud as possible). The default is 0.5.
 ///
-/// Available since: 1.2.0 on GTK, 1.3.0 on macOS.
+/// Available since: 1.3.0
 @"bell-audio-volume": f64 = 0.5,
-
-/// Control the in-app notifications that Hallows shows.
-///
-/// On Linux (GTK), in-app notifications show up as toasts. Toasts appear
-/// overlaid on top of the terminal window. They are used to show information
-/// that is not critical but may be important.
-///
-/// Possible notifications are:
-///
-///   - `clipboard-copy` (default: true) - Show a notification when text is copied
-///     to the clipboard.
-///   - `config-reload` (default: true) - Show a notification when
-///     the configuration is reloaded.
-///
-/// To specify a notification to enable, specify the name of the notification.
-/// To specify a notification to disable, prefix the name with `no-`. For
-/// example, to disable `clipboard-copy`, set this configuration to
-/// `no-clipboard-copy`. To enable it, set this configuration to `clipboard-copy`.
-///
-/// Multiple notifications can be enabled or disabled by separating them
-/// with a comma.
-///
-/// A value of "false" will disable all notifications. A value of "true" will
-/// enable all notifications.
-///
-/// This configuration only applies to GTK.
-///
-/// Available since: 1.1.0
-@"app-notifications": AppNotifications = .{},
 
 /// If anything other than false, fullscreen mode on macOS will not use the
 /// native fullscreen, but make the window fullscreen without animations and
@@ -3451,201 +3060,6 @@ keybind: Keybinds = .{},
 /// Available since: 1.2.0
 @"macos-shortcuts": MacShortcuts = .ask,
 
-/// Put every surface (tab, split, window) into a transient `systemd` scope.
-///
-/// This allows per-surface resource management. For example, if a shell program
-/// is using too much memory, only that shell will be killed by the oom monitor
-/// instead of the entire Hallows process. Similarly, if a shell program is
-/// using too much CPU, only that surface will be CPU-throttled.
-///
-/// This will cause startup times to be slower (a hundred milliseconds or so),
-/// so the default value is "single-instance." In single-instance mode, only
-/// one instance of Hallows is running (see gtk-single-instance) so the startup
-/// time is a one-time cost. Additionally, single instance Hallows is much
-/// more likely to have many windows, tabs, etc. so cgroup isolation is a
-/// big benefit.
-///
-/// This feature requires `systemd`. If `systemd` is unavailable, cgroup
-/// initialization will fail. By default, this will not prevent Hallows from
-/// working (see `linux-cgroup-hard-fail`).
-///
-/// Changing this value and reloading the config will not affect existing
-/// surfaces.
-///
-/// Valid values are:
-///
-///   * `never` - Never use cgroups.
-///   * `always` - Always use cgroups.
-///   * `single-instance` - Enable cgroups only for Hallows instances launched
-///     as single-instance applications (see gtk-single-instance).
-@"linux-cgroup": LinuxCgroup = if (builtin.os.tag == .linux)
-    .@"single-instance"
-else
-    .never,
-
-/// Memory limit for any individual terminal process (tab, split, window,
-/// etc.) in bytes. If this is unset then no memory limit will be set.
-///
-/// Note that this sets the `MemoryHigh` setting on the transient `systemd`
-/// scope, which is a soft limit. You should configure something like
-/// `systemd-oom` to handle killing processes that have too much memory
-/// pressure.
-///
-/// Changing this value and reloading the config will not affect existing
-/// surfaces.
-///
-/// See the `systemd.resource-control` manual page for more information:
-/// https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html
-@"linux-cgroup-memory-limit": ?u64 = null,
-
-/// Number of processes limit for any individual terminal process (tab, split,
-/// window, etc.). If this is unset then no limit will be set.
-///
-/// Note that this sets the `TasksMax` setting on the transient `systemd` scope,
-/// which is a hard limit.
-///
-/// Changing this value and reloading the config will not affect existing
-/// surfaces.
-///
-/// See the `systemd.resource-control` manual page for more information:
-/// https://www.freedesktop.org/software/systemd/man/latest/systemd.resource-control.html
-@"linux-cgroup-processes-limit": ?u64 = null,
-
-/// If this is false, then creating a transient `systemd` scope (for
-/// `linux-cgroup`) will be allowed to fail and the failure is ignored. This is
-/// useful if you view cgroup isolation as a "nice to have" and not a critical
-/// resource management feature, because surface creation will not fail if
-/// `systemd` APIs fail.
-///
-/// If this is true, then any transient `systemd` scope creation failure will
-/// cause surface creation to fail.
-///
-/// Changing this value and reloading the config will not affect existing
-/// surfaces.
-@"linux-cgroup-hard-fail": bool = false,
-
-/// Enable or disable GTK's OpenGL debugging logs. The default is `true` for
-/// debug builds, `false` for all others.
-///
-/// Available since: 1.1.0
-@"gtk-opengl-debug": bool = builtin.mode == .Debug,
-
-/// If `true`, the Hallows GTK application will run in single-instance mode:
-/// each new `hallows` process launched will result in a new window if there is
-/// already a running process.
-///
-/// If `false`, each new ghostty process will launch a separate application.
-///
-/// If `detect`, Hallows will assume true (single instance) unless one of
-/// the following scenarios is found:
-///
-/// 1. TERM_PROGRAM environment variable is a non-empty value. In this
-/// case, we assume Hallows is being launched from a graphical terminal
-/// session and you want a dedicated instance.
-///
-/// 2. Any CLI arguments exist. In this case, we assume you are passing
-/// custom Hallows configuration. Single instance mode inherits the
-/// configuration from when it was launched, so we must disable single
-/// instance to load the new configuration.
-///
-/// If either of these scenarios is producing a false positive, you can
-/// set this configuration explicitly to the behavior you want.
-///
-/// The pre-1.2 option `desktop` has been deprecated. Please replace
-/// this with `detect`.
-///
-/// The default value is `detect`.
-///
-/// Note that debug builds of Hallows have a separate single-instance ID
-/// so you can test single instance without conflicting with release builds.
-@"gtk-single-instance": GtkSingleInstance = .default,
-
-/// When enabled, the full GTK titlebar is displayed instead of your window
-/// manager's simple titlebar. The behavior of this option will vary with your
-/// window manager.
-///
-/// This option does nothing when `window-decoration` is none or when running
-/// under macOS.
-@"gtk-titlebar": bool = true,
-
-/// Determines the side of the screen that the GTK tab bar will stick to.
-/// Top, bottom, and hidden are supported. The default is top.
-///
-/// When `hidden` is set, a tab button displaying the number of tabs will appear
-/// in the title bar. It has the ability to open a tab overview for displaying
-/// tabs. Alternatively, you can use the `toggle_tab_overview` action in a
-/// keybind if your window doesn't have a title bar, or you can switch tabs
-/// with keybinds.
-@"gtk-tabs-location": GtkTabsLocation = .top,
-
-/// If this is `true`, the titlebar will be hidden when the window is maximized,
-/// and shown when the titlebar is unmaximized. GTK only.
-///
-/// Available since: 1.1.0
-@"gtk-titlebar-hide-when-maximized": bool = false,
-
-/// Determines the appearance of the top and bottom bars tab bar.
-///
-/// Valid values are:
-///
-///  * `flat` - Top and bottom bars are flat with the terminal window.
-///  * `raised` - Top and bottom bars cast a shadow on the terminal area.
-///  * `raised-border` - Similar to `raised` but the shadow is replaced with a
-///    more subtle border.
-@"gtk-toolbar-style": GtkToolbarStyle = .raised,
-
-/// The style of the GTK titlebar. Available values are `native` and `tabs`.
-///
-/// The `native` titlebar style is a traditional titlebar with a title, a few
-/// buttons and window controls. A separate tab bar will show up below the
-/// titlebar if you have multiple tabs open in the window.
-///
-/// The `tabs` titlebar merges the tab bar and the traditional titlebar.
-/// This frees up vertical space on your screen if you use multiple tabs. One
-/// limitation of the `tabs` titlebar is that you cannot drag the titlebar
-/// by the titles any longer (as they are tab titles now). Other areas of the
-/// `tabs` title bar can be used to drag the window around.
-///
-/// The default style is `native`.
-@"gtk-titlebar-style": GtkTitlebarStyle = .native,
-
-/// If `true` (default), then the Hallows GTK tabs will be "wide." Wide tabs
-/// are the new typical Gnome style where tabs fill their available space.
-/// If you set this to `false` then tabs will only take up space they need,
-/// which is the old style.
-@"gtk-wide-tabs": bool = true,
-
-/// If `true` (default), then two-finger horizontal scrolling on a touchpad
-/// will switch between tabs. Scrolling left goes to the next tab and
-/// scrolling right goes to the previous tab. Set this to `false` to
-/// disable this behavior.
-///
-/// Available since 1.4.0.
-@"gtk-horizontal-tab-scroll": bool = true,
-
-/// Custom CSS files to be loaded.
-///
-/// GTK CSS documentation can be found at the following links:
-///
-///   * https://docs.gtk.org/gtk4/css-overview.html - An overview of GTK CSS.
-///   * https://docs.gtk.org/gtk4/css-properties.html - A comprehensive list
-///     of supported CSS properties.
-///
-/// Launch Hallows with `env GTK_DEBUG=interactive ghostty` to tweak Hallows'
-/// CSS in real time using the GTK Inspector. Errors in your CSS files would
-/// also be reported in the terminal you started Hallows from. See
-/// https://developer.gnome.org/documentation/tools/inspector.html for more
-/// information about the GTK Inspector.
-///
-/// This configuration can be repeated multiple times to load multiple files.
-/// Prepend a ? character to the file path to suppress errors if the file does
-/// not exist. If you want to include a file that begins with a literal ?
-/// character, surround the file path in double quotes (").
-/// The file size limit for a single stylesheet is 5MiB.
-///
-/// Available since: 1.1.0
-@"gtk-custom-css": RepeatablePath = .{},
-
 /// If `true` (default), applications running in the terminal can show desktop
 /// notifications using certain escape sequences such as OSC 9 or OSC 777.
 @"desktop-notifications": bool = true,
@@ -3711,39 +3125,7 @@ term: []const u8 = "xterm-hallows",
 /// running. Defaults to an empty string if not set.
 @"enquiry-response": []const u8 = "",
 
-/// Configures the low-level API to use for async IO, eventing, etc.
-///
-/// Most users should leave this set to `auto`. This will automatically detect
-/// scenarios where APIs may not be available (for example `io_uring` on
-/// certain hardened kernels) and fall back to a different API. However, if
-/// you want to force a specific backend for any reason, you can set this
-/// here.
-///
-/// Based on various benchmarks, we haven't found a statistically significant
-/// difference between the backends with regards to memory, CPU, or latency.
-/// The choice of backend is more about compatibility and features.
-///
-/// Available options:
-///
-///   * `auto` - Automatically choose the best backend for the platform
-///     based on available options.
-///   * `epoll` - Use the `epoll` API
-///   * `io_uring` - Use the `io_uring` API
-///
-/// If the selected backend is not available on the platform, Hallows will
-/// fall back to an automatically chosen backend that is available.
-///
-/// Changing this value requires a full application restart to take effect.
-///
-/// This is only supported on Linux, since this is the only platform
-/// where we have multiple options. On macOS, we always use `kqueue`.
-///
-/// Available since: 1.2.0
-@"async-backend": AsyncBackend = .auto,
-
-/// Control the auto-update functionality of Hallows. This is only supported
-/// on macOS currently, since Linux builds are distributed via package
-/// managers that are not centrally controlled by Hallows.
+/// Control the auto-update functionality of Hallows.
 ///
 /// Checking or downloading an update does not send any information to
 /// the project beyond standard network information mandated by the
@@ -3784,8 +3166,6 @@ term: []const u8 = "xterm-hallows",
 ///
 /// Changing this configuration requires a full restart of
 /// Hallows to take effect.
-///
-/// This only works on macOS since only macOS has an auto-update feature.
 @"auto-update-channel": ?build_config.ReleaseChannel = null,
 
 /// This is set by the CLI parser for deinit.
@@ -3807,9 +3187,6 @@ _conditional_set: std.EnumSet(conditional.Key) = .{},
 /// without reopening the files. This is used by changeConditionalState
 /// to rebuild the configuration for a new conditional state.
 _replay_steps: std.ArrayList(Replay.Step) = .empty,
-
-/// Set to true if Hallows was executed as xdg-terminal-exec on Linux.
-@"_xdg-terminal-exec": bool = false,
 
 pub fn deinit(self: *Config) void {
     if (self._arena) |arena| arena.deinit();
@@ -4034,110 +3411,53 @@ pub fn loadDefaultFiles(self: *Config, alloc: Allocator) !void {
             legacy_xdg_action != .not_found;
     };
 
-    // On macOS load the app support directory as well
-    if (comptime builtin.os.tag == .macos) {
-        const legacy_app_support_path = try file_load.legacyDefaultAppSupportPath(alloc);
-        defer alloc.free(legacy_app_support_path);
-        const app_support_path = try file_load.preferredAppSupportPath(alloc);
-        defer alloc.free(app_support_path);
-        const app_support_loaded: bool = loaded: {
-            const legacy_app_support_action = self.loadOptionalFile(
-                alloc,
-                legacy_app_support_path,
+    // Load the app support directory as well
+    const legacy_app_support_path = try file_load.legacyDefaultAppSupportPath(alloc);
+    defer alloc.free(legacy_app_support_path);
+    const app_support_path = try file_load.preferredAppSupportPath(alloc);
+    defer alloc.free(app_support_path);
+    const app_support_loaded: bool = loaded: {
+        const legacy_app_support_action = self.loadOptionalFile(
+            alloc,
+            legacy_app_support_path,
+        );
+
+        // The app support path and legacy may be the same, since we
+        // use the `preferred` call above. If its the same, avoid
+        // a double-load.
+        const app_support_action: OptionalFileAction = if (!std.mem.eql(
+            u8,
+            legacy_app_support_path,
+            app_support_path,
+        )) self.loadOptionalFile(
+            alloc,
+            app_support_path,
+        ) else .not_found;
+
+        if (app_support_action != .not_found and legacy_app_support_action != .not_found) {
+            log.warn(
+                "both config files `{s}` and `{s}` exist.",
+                .{ legacy_app_support_path, app_support_path },
             );
+            log.warn("loading them both in that order", .{});
+            break :loaded true;
+        }
 
-            // The app support path and legacy may be the same, since we
-            // use the `preferred` call above. If its the same, avoid
-            // a double-load.
-            const app_support_action: OptionalFileAction = if (!std.mem.eql(
-                u8,
-                legacy_app_support_path,
-                app_support_path,
-            )) self.loadOptionalFile(
-                alloc,
-                app_support_path,
-            ) else .not_found;
+        break :loaded app_support_action != .not_found or
+            legacy_app_support_action != .not_found;
+    };
 
-            if (app_support_action != .not_found and legacy_app_support_action != .not_found) {
-                log.warn(
-                    "both config files `{s}` and `{s}` exist.",
-                    .{ legacy_app_support_path, app_support_path },
-                );
-                log.warn("loading them both in that order", .{});
-                break :loaded true;
-            }
-
-            break :loaded app_support_action != .not_found or
-                legacy_app_support_action != .not_found;
+    // If both files are not found, then we create a template file.
+    // We only create the template file in the app support
+    if (!app_support_loaded and !xdg_loaded) {
+        writeConfigTemplate(app_support_path) catch |err| {
+            log.warn("error creating template config file err={}", .{err});
         };
-
-        // If both files are not found, then we create a template file.
-        // For macOS, we only create the template file in the app support
-        if (!app_support_loaded and !xdg_loaded) {
-            writeConfigTemplate(app_support_path) catch |err| {
-                log.warn("error creating template config file err={}", .{err});
-            };
-        }
-    } else {
-        if (!xdg_loaded) {
-            writeConfigTemplate(xdg_path) catch |err| {
-                log.warn("error creating template config file err={}", .{err});
-            };
-        }
     }
 }
 
 /// Load and parse the CLI args.
 pub fn loadCliArgs(self: *Config, alloc_gpa: Allocator) !void {
-    switch (builtin.os.tag) {
-        .windows => {},
-
-        // Fast-path if we are Linux/BSD and have no args.
-        .linux, .freebsd => if (global.args().vector.len <= 1) return,
-
-        // Everything else we have to at least try because it may
-        // not use std.os.argv.
-        else => {},
-    }
-
-    // On Linux, we have a special case where if the executing
-    // program is "xdg-terminal-exec" then we treat all CLI
-    // args as if they are a command to execute.
-    //
-    // In this mode, we also behave slightly differently:
-    //
-    //   - The initial window title is set to the full command. This
-    //     can be used with window managers to modify positioning,
-    //     styling, etc. based on the command.
-    //
-    // See: https://github.com/Vladimir-csp/xdg-terminal-exec
-    if ((comptime builtin.os.tag == .linux) or (comptime builtin.os.tag == .freebsd)) {
-        if (internal_os.xdg.parseTerminalExec(global.args().vector)) |args| {
-            const arena_alloc = self._arena.?.allocator();
-
-            // First, we add an artificial "-e" so that if we
-            // replay the inputs to rebuild the config (i.e. if
-            // the conditional state changes) then we will get the
-            // same behavior.
-            try self._replay_steps.append(arena_alloc, .@"-e");
-
-            // Next, take all remaining args and use that to build up
-            // a command to execute.
-            var builder: std.ArrayList([:0]const u8) = .empty;
-            errdefer builder.deinit(arena_alloc);
-            for (args) |arg_raw| {
-                const arg = std.mem.sliceTo(arg_raw, 0);
-                const copy = try arena_alloc.dupeZ(u8, arg);
-                try self._replay_steps.append(arena_alloc, .{ .arg = copy });
-                try builder.append(arena_alloc, copy);
-            }
-
-            self.@"_xdg-terminal-exec" = true;
-            self.@"initial-command" = .{ .direct = try builder.toOwnedSlice(arena_alloc) };
-            return;
-        }
-    }
-
     // We set config-default-files to true here because this
     // should always be reset so we can detect if it is set
     // in the CLI since it is documented as having no affect
@@ -4529,19 +3849,12 @@ pub fn finalize(self: *Config) !void {
     // If we are missing either a command or home directory, we need
     // to look up defaults which is kind of expensive. We only do this
     // on desktop.
-    if ((comptime !builtin.target.cpu.arch.isWasm()) and
-        (comptime !builtin.is_test))
-    {
+    if (comptime !builtin.is_test) {
         if (self.command == null or wd == .home) command: {
             // First look up the command using the SHELL env var if needed.
-            // We don't do this in flatpak because SHELL in Flatpak is always
-            // set to /bin/sh.
             if (self.command) |cmd|
                 log.info("shell src=config value={}", .{cmd})
             else shell_env: {
-                // Flatpak always gets its shell from outside the sandbox
-                if (internal_os.isFlatpak()) break :shell_env;
-
                 // If we were launched from the desktop, our SHELL env var
                 // will represent our SHELL at login time. We only want to
                 // read from SHELL if we're in a probable CLI environment.
@@ -4562,70 +3875,31 @@ pub fn finalize(self: *Config) !void {
                 if (wd != .home) break :command;
             }
 
-            switch (builtin.os.tag) {
-                .windows => {
-                    if (self.command == null) {
-                        log.warn("no default shell found, will default to using cmd", .{});
-                        self.command = .{ .shell = "cmd.exe" };
-                    }
+            // We need the passwd entry for the remainder
+            const pw = try internal_os.passwd.get(alloc);
+            if (self.command == null) {
+                if (pw.shell) |sh| {
+                    log.info("default shell src=passwd value={s}", .{sh});
+                    self.command = .{ .shell = sh };
+                }
+            }
 
-                    if (wd == .home) {
-                        var environ_map = try global.environMap();
-                        defer environ_map.deinit();
-                        var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-                        if (try internal_os.home(global.io(), &environ_map, &buf)) |home| {
-                            wd = .{ .path = try alloc.dupe(u8, home) };
-                        } else {
-                            wd = .inherit;
-                        }
-                    }
-                },
+            if (wd == .home) {
+                if (pw.home) |home| {
+                    log.info("default working directory src=passwd value={s}", .{home});
+                    wd = .{ .path = home };
+                } else {
+                    wd = .inherit;
+                }
+            }
 
-                else => {
-                    // We need the passwd entry for the remainder
-                    const pw = try internal_os.passwd.get(alloc);
-                    if (self.command == null) {
-                        if (pw.shell) |sh| {
-                            log.info("default shell src=passwd value={s}", .{sh});
-                            self.command = .{ .shell = sh };
-                        }
-                    }
-
-                    if (wd == .home) {
-                        if (pw.home) |home| {
-                            log.info("default working directory src=passwd value={s}", .{home});
-                            wd = .{ .path = home };
-                        } else {
-                            wd = .inherit;
-                        }
-                    }
-
-                    if (self.command == null) {
-                        log.warn("no default shell found, will default to using sh", .{});
-                    }
-                },
+            if (self.command == null) {
+                log.warn("no default shell found, will default to using sh", .{});
             }
         }
     }
     try wd.finalize(alloc);
     self.@"working-directory" = wd;
-
-    // Apprt-specific defaults
-    switch (build_config.app_runtime) {
-        .none => {},
-        .gtk => {
-            switch (self.@"gtk-single-instance") {
-                .true, .false => {},
-
-                // For detection, we assume single instance unless we're
-                // in a CLI environment, then we disable single instance.
-                .detect => self.@"gtk-single-instance" = if (probable_cli)
-                    .false
-                else
-                    .true,
-            }
-        },
-    }
 
     // Default our click interval
     if (self.@"click-repeat-interval" == 0 and
@@ -4651,18 +3925,6 @@ pub fn finalize(self: *Config) !void {
     // If URLs are disabled, cut off the first link. The first link is
     // always the URL matcher.
     if (!self.@"link-url") self.link.links.items = self.link.links.items[1..];
-
-    // We warn when the quit-after-last-window-closed-delay is set to a very
-    // short value because it can cause Ghostty to quit before the first
-    // window is even shown.
-    if (self.@"quit-after-last-window-closed-delay") |duration| {
-        if (duration.duration < 5 * std.time.ns_per_s) {
-            log.warn(
-                "quit-after-last-window-closed-delay is set to a very short value ({f}), which might cause problems",
-                .{duration},
-            );
-        }
-    }
 
     // We can't set this as a struct default because our config is
     // loaded in environments where a build config isn't available.
@@ -4717,9 +3979,7 @@ pub fn parseManuallyHook(
 
         // See "command" docs for the implied configurations and why.
         self.@"initial-command" = .{ .direct = command.items };
-        self.@"gtk-single-instance" = .false;
         self.@"quit-after-last-window-closed" = true;
-        self.@"quit-after-last-window-closed-delay" = null;
         if (self.@"shell-integration" != .none) {
             self.@"shell-integration" = .detect;
         }
@@ -4736,40 +3996,6 @@ pub fn parseManuallyHook(
 
     // If we didn't find a special case, continue parsing normally
     return true;
-}
-
-fn compatGtkTabsLocation(
-    self: *Config,
-    alloc: Allocator,
-    key: []const u8,
-    value: ?[]const u8,
-) bool {
-    _ = alloc;
-    assert(std.mem.eql(u8, key, "gtk-tabs-location"));
-
-    if (std.mem.eql(u8, value orelse "", "hidden")) {
-        self.@"window-show-tab-bar" = .never;
-        return true;
-    }
-
-    return false;
-}
-
-fn compatGtkSingleInstance(
-    self: *Config,
-    alloc: Allocator,
-    key: []const u8,
-    value: ?[]const u8,
-) bool {
-    _ = alloc;
-    assert(std.mem.eql(u8, key, "gtk-single-instance"));
-
-    if (std.mem.eql(u8, value orelse "", "desktop")) {
-        self.@"gtk-single-instance" = .detect;
-        return true;
-    }
-
-    return false;
 }
 
 fn compatCursorInvertFgBg(
@@ -4861,10 +4087,7 @@ fn compatCopyOnSelect(
     assert(std.mem.eql(u8, key, "copy-on-select"));
 
     if (std.mem.eql(u8, value orelse "", "true")) {
-        self.@"copy-on-select" = switch (builtin.os.tag) {
-            .linux, .freebsd => .primary,
-            else => .clipboard,
-        };
+        self.@"copy-on-select" = .clipboard;
         return true;
     }
 
@@ -5072,28 +4295,14 @@ pub const ChangeIterator = struct {
 /// We should keep the set of behaviors that depend on this as small
 /// as possible because magic sucks, but each place is well documented.
 fn probableCliEnvironment() bool {
-    switch (builtin.os.tag) {
-        // Windows has its own problems, just ignore it for now since
-        // its not a real supported target and GTK via WSL2 assuming
-        // single instance is probably fine.
-        .windows => return false,
-
-        // On macOS, we don't want to detect `open` calls as CLI envs.
-        // Our desktop detection on macOS is very accurate due to how
-        // processes are launched on macOS, so if we detect we're launched
-        // from the app bundle then we're not in a CLI environment.
-        .macos => if (internal_os.launchedFromDesktop()) return false,
-
-        else => {},
-    }
+    // We don't want to detect `open` calls as CLI envs. Our desktop
+    // detection on macOS is very accurate due to how processes are
+    // launched on macOS, so if we detect we're launched from the app
+    // bundle then we're not in a CLI environment.
+    if (internal_os.launchedFromDesktop()) return false;
 
     // If we have TERM_PROGRAM set to a non-empty value, we assume a graphical
     // terminal environment.
-    //
-    // TODO: This is not available on WASI without libc due to the memory
-    // allocation requirement. This restricts this function to said platforms.
-    // To be fair, the legacy getenv path had more restrictive issues (no WASI
-    // period, or Windows for that matter).
     if (global.environ().containsUnemptyConstant("TERM_PROGRAM")) return true;
 
     // CLI arguments makes things probable
@@ -5265,11 +4474,6 @@ pub const WindowPaddingColor = enum {
     background,
     extend,
     @"extend-always",
-};
-
-pub const WindowSubtitle = enum {
-    false,
-    @"working-directory",
 };
 
 pub const LinkPreviews = enum {
@@ -6432,31 +5636,7 @@ pub const Keybinds = struct {
                 .paste_from_clipboard,
             );
 
-            // On non-MacOS desktop envs (Windows, KDE, Gnome, Xfce), ctrl+insert is an
-            // alt keybinding for Copy and shift+ins is an alt keybinding for Paste
-            //
-            // The order of these blocks is important. The *last* added keybind for a given action is
-            // what will display in the menu. We want the more typical keybinds after this block to be
-            // the standard
-            if (!builtin.target.os.tag.isDarwin()) {
-                try self.set.put(
-                    alloc,
-                    .{ .key = .{ .physical = .insert }, .mods = .{ .ctrl = true } },
-                    .{ .copy_to_clipboard = .mixed },
-                );
-                try self.set.put(
-                    alloc,
-                    .{ .key = .{ .physical = .insert }, .mods = .{ .shift = true } },
-                    .{ .paste_from_clipboard = {} },
-                );
-            }
-
-            // On macOS we default to super but Linux ctrl+shift since
-            // ctrl+c is to kill the process.
-            const mods: inputpkg.Mods = if (builtin.target.os.tag.isDarwin())
-                .{ .super = true }
-            else
-                .{ .ctrl = true, .shift = true };
+            const mods: inputpkg.Mods = .{ .super = true };
 
             try self.set.putFlags(
                 alloc,
@@ -6578,227 +5758,10 @@ pub const Keybinds = struct {
             .{ .next_tab = {} },
         );
 
-        // Windowing
-        if (comptime !builtin.target.os.tag.isDarwin()) {
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'n' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .new_window = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'w' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .close_surface = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'q' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .quit = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .f4 }, .mods = .{ .alt = true } },
-                .{ .close_window = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 't' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .new_tab = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'w' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .close_tab = .this },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .arrow_left }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .previous_tab = {} },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .arrow_right }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .next_tab = {} },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .page_up }, .mods = .{ .ctrl = true } },
-                .{ .previous_tab = {} },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .page_down }, .mods = .{ .ctrl = true } },
-                .{ .next_tab = {} },
-                .{ .performable = true },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'o' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .new_split = .right },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'e' }, .mods = .{ .ctrl = true, .shift = true } },
-                .{ .new_split = .down },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = '[' }, .mods = .{ .ctrl = true, .super = true } },
-                .{ .goto_split = .previous },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = ']' }, .mods = .{ .ctrl = true, .super = true } },
-                .{ .goto_split = .next },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .arrow_up }, .mods = .{ .ctrl = true, .alt = true } },
-                .{ .goto_split = .up },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .arrow_down }, .mods = .{ .ctrl = true, .alt = true } },
-                .{ .goto_split = .down },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .arrow_left }, .mods = .{ .ctrl = true, .alt = true } },
-                .{ .goto_split = .left },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .arrow_right }, .mods = .{ .ctrl = true, .alt = true } },
-                .{ .goto_split = .right },
-                .{ .performable = true },
-            );
-
-            // Resizing splits
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .arrow_up }, .mods = .{ .super = true, .ctrl = true, .shift = true } },
-                .{ .resize_split = .{ .up, 10 } },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .arrow_down }, .mods = .{ .super = true, .ctrl = true, .shift = true } },
-                .{ .resize_split = .{ .down, 10 } },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .arrow_left }, .mods = .{ .super = true, .ctrl = true, .shift = true } },
-                .{ .resize_split = .{ .left, 10 } },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .arrow_right }, .mods = .{ .super = true, .ctrl = true, .shift = true } },
-                .{ .resize_split = .{ .right, 10 } },
-                .{ .performable = true },
-            );
-
-            // Viewport scrolling
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .home }, .mods = .{ .shift = true } },
-                .{ .scroll_to_top = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .end }, .mods = .{ .shift = true } },
-                .{ .scroll_to_bottom = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .page_up }, .mods = .{ .shift = true } },
-                .{ .scroll_page_up = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .page_down }, .mods = .{ .shift = true } },
-                .{ .scroll_page_down = {} },
-            );
-
-            // Semantic prompts
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_up }, .mods = .{ .shift = true, .ctrl = true } },
-                .{ .jump_to_prompt = -1 },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_down }, .mods = .{ .shift = true, .ctrl = true } },
-                .{ .jump_to_prompt = 1 },
-            );
-
-            // Move tab
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .page_up }, .mods = .{ .shift = true, .ctrl = true } },
-                .{ .move_tab = -1 },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .page_down }, .mods = .{ .shift = true, .ctrl = true } },
-                .{ .move_tab = 1 },
-                .{ .performable = true },
-            );
-
-            // Search
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 'f' }, .mods = .{ .ctrl = true, .shift = true } },
-                .start_search,
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .escape } },
-                .end_search,
-                .{ .performable = true },
-            );
-
-            // Inspector, matching Chromium
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'i' }, .mods = .{ .shift = true, .ctrl = true } },
-                .{ .inspector = .toggle },
-            );
-
-            // Terminal
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'a' }, .mods = .{ .shift = true, .ctrl = true } },
-                .{ .select_all = {} },
-            );
-
-            // Selection clipboard paste
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .insert }, .mods = .{ .shift = true } },
-                .{ .paste_from_selection = {} },
-            );
-        }
         {
-            // On macOS we default to super but everywhere else
-            // is alt.
-            const mods: inputpkg.Mods = if (builtin.target.os.tag.isDarwin())
-                .{ .super = true }
-            else
-                .{ .alt = true };
+            const mods: inputpkg.Mods = .{ .super = true };
 
-            // Cmd/Alt+N for goto tab N
+            // Cmd+N for goto tab N
             const start: u21 = '1';
             const end: u21 = '8';
             comptime var i: u21 = start;
@@ -6820,12 +5783,12 @@ pub const Keybinds = struct {
                     },
                     .{ .goto_tab = (i - start) + 1 },
                     .{
-                        // On macOS we keep this not performable so that the
+                        // We keep this not performable so that the
                         // keyboard shortcuts in tabs work. In the future the
                         // correct fix is to fix the reverse mapping lookup
                         // to allow us to lookup performable keybinds
                         // conditionally.
-                        .performable = !builtin.target.os.tag.isDarwin(),
+                        .performable = false,
                     },
                 );
 
@@ -6841,7 +5804,7 @@ pub const Keybinds = struct {
                     },
                     .{ .goto_tab = (i - start) + 1 },
                     .{
-                        .performable = !builtin.target.os.tag.isDarwin(),
+                        .performable = false,
                     },
                 );
             }
@@ -6854,7 +5817,7 @@ pub const Keybinds = struct {
                 .{ .last_tab = {} },
                 .{
                     // See comment above with the numeric goto_tab
-                    .performable = !builtin.target.os.tag.isDarwin(),
+                    .performable = false,
                 },
             );
         }
@@ -6881,300 +5844,298 @@ pub const Keybinds = struct {
         );
 
         // Mac-specific keyboard bindings.
-        if (comptime builtin.target.os.tag.isDarwin()) {
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'q' }, .mods = .{ .super = true } },
-                .{ .quit = {} },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 'k' }, .mods = .{ .super = true } },
-                .{ .clear_screen = {} },
-                .{ .performable = true },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'a' }, .mods = .{ .super = true } },
-                .{ .select_all = {} },
-            );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'q' }, .mods = .{ .super = true } },
+            .{ .quit = {} },
+        );
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .unicode = 'k' }, .mods = .{ .super = true } },
+            .{ .clear_screen = {} },
+            .{ .performable = true },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'a' }, .mods = .{ .super = true } },
+            .{ .select_all = {} },
+        );
 
-            // File tree, matches Warp
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = '\\' }, .mods = .{ .super = true } },
-                .toggle_file_tree,
-            );
+        // File tree, matches Warp
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = '\\' }, .mods = .{ .super = true } },
+            .toggle_file_tree,
+        );
 
-            // Undo/redo
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 't' }, .mods = .{ .super = true, .shift = true } },
-                .{ .undo = {} },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 'z' }, .mods = .{ .super = true } },
-                .{ .undo = {} },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 'z' }, .mods = .{ .super = true, .shift = true } },
-                .{ .redo = {} },
-                .{ .performable = true },
-            );
+        // Undo/redo
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .unicode = 't' }, .mods = .{ .super = true, .shift = true } },
+            .{ .undo = {} },
+            .{ .performable = true },
+        );
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .unicode = 'z' }, .mods = .{ .super = true } },
+            .{ .undo = {} },
+            .{ .performable = true },
+        );
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .unicode = 'z' }, .mods = .{ .super = true, .shift = true } },
+            .{ .redo = {} },
+            .{ .performable = true },
+        );
 
-            // Viewport scrolling
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .home }, .mods = .{ .super = true } },
-                .{ .scroll_to_top = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .end }, .mods = .{ .super = true } },
-                .{ .scroll_to_bottom = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .page_up }, .mods = .{ .super = true } },
-                .{ .scroll_page_up = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .page_down }, .mods = .{ .super = true } },
-                .{ .scroll_page_down = {} },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 'j' }, .mods = .{ .super = true } },
-                .{ .scroll_to_selection = {} },
-                .{ .performable = true },
-            );
+        // Viewport scrolling
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .home }, .mods = .{ .super = true } },
+            .{ .scroll_to_top = {} },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .end }, .mods = .{ .super = true } },
+            .{ .scroll_to_bottom = {} },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .page_up }, .mods = .{ .super = true } },
+            .{ .scroll_page_up = {} },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .page_down }, .mods = .{ .super = true } },
+            .{ .scroll_page_down = {} },
+        );
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .unicode = 'j' }, .mods = .{ .super = true } },
+            .{ .scroll_to_selection = {} },
+            .{ .performable = true },
+        );
 
-            // Semantic prompts
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_up }, .mods = .{ .super = true, .shift = true } },
-                .{ .jump_to_prompt = -1 },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_down }, .mods = .{ .super = true, .shift = true } },
-                .{ .jump_to_prompt = 1 },
-            );
+        // Semantic prompts
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_up }, .mods = .{ .super = true, .shift = true } },
+            .{ .jump_to_prompt = -1 },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_down }, .mods = .{ .super = true, .shift = true } },
+            .{ .jump_to_prompt = 1 },
+        );
 
-            // Mac windowing
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'n' }, .mods = .{ .super = true } },
-                .{ .new_window = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'w' }, .mods = .{ .super = true } },
-                .{ .close_surface = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'w' }, .mods = .{ .super = true, .alt = true } },
-                .{ .close_tab = .this },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'w' }, .mods = .{ .super = true, .shift = true } },
-                .{ .close_window = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'w' }, .mods = .{ .super = true, .shift = true, .alt = true } },
-                .{ .close_all_windows = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 't' }, .mods = .{ .super = true } },
-                .{ .new_tab = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = '[' }, .mods = .{ .super = true, .shift = true } },
-                .{ .previous_tab = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = ']' }, .mods = .{ .super = true, .shift = true } },
-                .{ .next_tab = {} },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'd' }, .mods = .{ .super = true } },
-                .{ .new_split = .right },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'd' }, .mods = .{ .super = true, .shift = true } },
-                .{ .new_split = .down },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = '[' }, .mods = .{ .super = true } },
-                .{ .goto_split = .previous },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = ']' }, .mods = .{ .super = true } },
-                .{ .goto_split = .next },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_up }, .mods = .{ .super = true, .alt = true } },
-                .{ .goto_split = .up },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_down }, .mods = .{ .super = true, .alt = true } },
-                .{ .goto_split = .down },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_left }, .mods = .{ .super = true, .alt = true } },
-                .{ .goto_split = .left },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_right }, .mods = .{ .super = true, .alt = true } },
-                .{ .goto_split = .right },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_up }, .mods = .{ .super = true, .ctrl = true } },
-                .{ .resize_split = .{ .up, 10 } },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_down }, .mods = .{ .super = true, .ctrl = true } },
-                .{ .resize_split = .{ .down, 10 } },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_left }, .mods = .{ .super = true, .ctrl = true } },
-                .{ .resize_split = .{ .left, 10 } },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_right }, .mods = .{ .super = true, .ctrl = true } },
-                .{ .resize_split = .{ .right, 10 } },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = '=' }, .mods = .{ .super = true, .ctrl = true } },
-                .{ .equalize_splits = {} },
-            );
+        // Mac windowing
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'n' }, .mods = .{ .super = true } },
+            .{ .new_window = {} },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'w' }, .mods = .{ .super = true } },
+            .{ .close_surface = {} },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'w' }, .mods = .{ .super = true, .alt = true } },
+            .{ .close_tab = .this },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'w' }, .mods = .{ .super = true, .shift = true } },
+            .{ .close_window = {} },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'w' }, .mods = .{ .super = true, .shift = true, .alt = true } },
+            .{ .close_all_windows = {} },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 't' }, .mods = .{ .super = true } },
+            .{ .new_tab = {} },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = '[' }, .mods = .{ .super = true, .shift = true } },
+            .{ .previous_tab = {} },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = ']' }, .mods = .{ .super = true, .shift = true } },
+            .{ .next_tab = {} },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'd' }, .mods = .{ .super = true } },
+            .{ .new_split = .right },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'd' }, .mods = .{ .super = true, .shift = true } },
+            .{ .new_split = .down },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = '[' }, .mods = .{ .super = true } },
+            .{ .goto_split = .previous },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = ']' }, .mods = .{ .super = true } },
+            .{ .goto_split = .next },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_up }, .mods = .{ .super = true, .alt = true } },
+            .{ .goto_split = .up },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_down }, .mods = .{ .super = true, .alt = true } },
+            .{ .goto_split = .down },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_left }, .mods = .{ .super = true, .alt = true } },
+            .{ .goto_split = .left },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_right }, .mods = .{ .super = true, .alt = true } },
+            .{ .goto_split = .right },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_up }, .mods = .{ .super = true, .ctrl = true } },
+            .{ .resize_split = .{ .up, 10 } },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_down }, .mods = .{ .super = true, .ctrl = true } },
+            .{ .resize_split = .{ .down, 10 } },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_left }, .mods = .{ .super = true, .ctrl = true } },
+            .{ .resize_split = .{ .left, 10 } },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_right }, .mods = .{ .super = true, .ctrl = true } },
+            .{ .resize_split = .{ .right, 10 } },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = '=' }, .mods = .{ .super = true, .ctrl = true } },
+            .{ .equalize_splits = {} },
+        );
 
-            // Jump to prompt, matches Terminal.app
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_up }, .mods = .{ .super = true } },
-                .{ .jump_to_prompt = -1 },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_down }, .mods = .{ .super = true } },
-                .{ .jump_to_prompt = 1 },
-            );
+        // Jump to prompt, matches Terminal.app
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_up }, .mods = .{ .super = true } },
+            .{ .jump_to_prompt = -1 },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_down }, .mods = .{ .super = true } },
+            .{ .jump_to_prompt = 1 },
+        );
 
-            // Search
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 'f' }, .mods = .{ .super = true } },
-                .start_search,
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 'e' }, .mods = .{ .super = true } },
-                .search_selection,
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 'f' }, .mods = .{ .super = true, .shift = true } },
-                .end_search,
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .physical = .escape } },
-                .end_search,
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 'g' }, .mods = .{ .super = true } },
-                .{ .navigate_search = .next },
-                .{ .performable = true },
-            );
-            try self.set.putFlags(
-                alloc,
-                .{ .key = .{ .unicode = 'g' }, .mods = .{ .super = true, .shift = true } },
-                .{ .navigate_search = .previous },
-                .{ .performable = true },
-            );
+        // Search
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .unicode = 'f' }, .mods = .{ .super = true } },
+            .start_search,
+            .{ .performable = true },
+        );
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .unicode = 'e' }, .mods = .{ .super = true } },
+            .search_selection,
+            .{ .performable = true },
+        );
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .unicode = 'f' }, .mods = .{ .super = true, .shift = true } },
+            .end_search,
+            .{ .performable = true },
+        );
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .physical = .escape } },
+            .end_search,
+            .{ .performable = true },
+        );
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .unicode = 'g' }, .mods = .{ .super = true } },
+            .{ .navigate_search = .next },
+            .{ .performable = true },
+        );
+        try self.set.putFlags(
+            alloc,
+            .{ .key = .{ .unicode = 'g' }, .mods = .{ .super = true, .shift = true } },
+            .{ .navigate_search = .previous },
+            .{ .performable = true },
+        );
 
-            // Inspector, matching Chromium
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'i' }, .mods = .{ .alt = true, .super = true } },
-                .{ .inspector = .toggle },
-            );
+        // Inspector, matching Chromium
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'i' }, .mods = .{ .alt = true, .super = true } },
+            .{ .inspector = .toggle },
+        );
 
-            // Alternate keybind, common to Mac programs
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'f' }, .mods = .{ .super = true, .ctrl = true } },
-                .{ .toggle_fullscreen = {} },
-            );
+        // Alternate keybind, common to Mac programs
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'f' }, .mods = .{ .super = true, .ctrl = true } },
+            .{ .toggle_fullscreen = {} },
+        );
 
-            // Selection clipboard paste, matches Terminal.app
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .unicode = 'v' }, .mods = .{ .super = true, .shift = true } },
-                .{ .paste_from_selection = {} },
-            );
+        // Selection clipboard paste, matches Terminal.app
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .unicode = 'v' }, .mods = .{ .super = true, .shift = true } },
+            .{ .paste_from_selection = {} },
+        );
 
-            // "Natural text editing" keybinds. This forces these keys to go back
-            // to legacy encoding (not fixterms). It seems macOS users more than
-            // others are used to these keys so we set them as defaults. If
-            // people want to get back to the fixterm encoding they can set
-            // the keybinds to `unbind`.
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_right }, .mods = .{ .super = true } },
-                .{ .text = "\\x05" },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_left }, .mods = .{ .super = true } },
-                .{ .text = "\\x01" },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .backspace }, .mods = .{ .super = true } },
-                .{ .text = "\\x15" },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_left }, .mods = .{ .alt = true } },
-                .{ .esc = "b" },
-            );
-            try self.set.put(
-                alloc,
-                .{ .key = .{ .physical = .arrow_right }, .mods = .{ .alt = true } },
-                .{ .esc = "f" },
-            );
-        }
+        // "Natural text editing" keybinds. This forces these keys to go back
+        // to legacy encoding (not fixterms). It seems macOS users more than
+        // others are used to these keys so we set them as defaults. If
+        // people want to get back to the fixterm encoding they can set
+        // the keybinds to `unbind`.
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_right }, .mods = .{ .super = true } },
+            .{ .text = "\\x05" },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_left }, .mods = .{ .super = true } },
+            .{ .text = "\\x01" },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .backspace }, .mods = .{ .super = true } },
+            .{ .text = "\\x15" },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_left }, .mods = .{ .alt = true } },
+            .{ .esc = "b" },
+        );
+        try self.set.put(
+            alloc,
+            .{ .key = .{ .physical = .arrow_right }, .mods = .{ .alt = true } },
+            .{ .esc = "f" },
+        );
     }
 
     pub fn parseCLI(self: *Keybinds, alloc: Allocator, input: ?[]const u8) !void {
@@ -8599,15 +7560,14 @@ pub const CopyOnSelect = enum {
     none,
 
     /// Copy on select is enabled, but goes to the selection clipboard.
-    /// This is not supported on platforms such as macOS. This is the default
-    /// on Linux.
+    /// macOS has no selection clipboard, so this has no effect.
     primary,
 
     /// Copy on select is enabled and goes to the system clipboard.
     clipboard,
 
     /// Copy on select is enabled and goes to both the system clipboard
-    /// and the selection clipboard (for Linux).
+    /// and the selection clipboard.
     both,
 };
 
@@ -8705,16 +7665,8 @@ pub const RepeatableCommand = struct {
         try self.value.ensureUnusedCapacity(alloc, inputpkg.command.defaults.len);
         try self.value_c.ensureUnusedCapacity(alloc, inputpkg.command.defaults.len);
         for (inputpkg.command.defaults) |cmd| {
-            // Translation is currently a GTK-only feature. In particular,
-            // translating these shared strings for the embedded runtime gives
-            // the macOS app a localized command palette in an otherwise
-            // unlocalized UI.
-            const localized = if (comptime build_config.app_runtime == .gtk)
-                cmd.translated()
-            else
-                cmd;
-            self.value.appendAssumeCapacity(localized);
-            self.value_c.appendAssumeCapacity(try localized.cval(alloc));
+            self.value.appendAssumeCapacity(cmd);
+            self.value_c.appendAssumeCapacity(try cmd.cval(alloc));
         }
     }
 
@@ -9080,49 +8032,6 @@ pub const MacShortcuts = enum {
     ask,
 };
 
-/// See gtk-single-instance
-pub const GtkSingleInstance = enum {
-    false,
-    true,
-    detect,
-
-    pub const default: GtkSingleInstance = .detect;
-};
-
-/// See gtk-tabs-location
-pub const GtkTabsLocation = enum {
-    top,
-    bottom,
-};
-
-/// See gtk-toolbar-style
-pub const GtkToolbarStyle = enum {
-    flat,
-    raised,
-    @"raised-border",
-};
-
-/// See gtk-titlebar-style
-pub const GtkTitlebarStyle = enum(c_int) {
-    native,
-    tabs,
-
-    pub const getGObjectType = switch (build_config.app_runtime) {
-        .gtk => @import("gobject").ext.defineEnum(
-            GtkTitlebarStyle,
-            .{ .name = "GhosttyGtkTitlebarStyle" },
-        ),
-
-        .none => void,
-    };
-};
-
-/// See app-notifications
-pub const AppNotifications = packed struct {
-    @"clipboard-copy": bool = true,
-    @"config-reload": bool = true,
-};
-
 /// See bell-features
 pub const BellFeatures = packed struct {
     system: bool = false,
@@ -9268,13 +8177,6 @@ pub const MacOSDockDropBehavior = enum {
     @"new-window",
 };
 
-/// See window-show-tab-bar
-pub const WindowShowTabBar = enum {
-    always,
-    auto,
-    never,
-};
-
 /// See drag-handle
 pub const DragHandle = enum {
     always,
@@ -9307,14 +8209,6 @@ pub const QuickTerminalPosition = enum {
     left,
     right,
     center,
-};
-
-/// See quick-terminal-layer
-pub const QuickTerminalLayer = enum {
-    overlay,
-    top,
-    bottom,
-    background,
 };
 
 /// See quick-terminal-size
@@ -9623,13 +8517,6 @@ pub const QuickTerminalSpaceBehavior = enum {
     move,
 };
 
-/// See quick-terminal-keyboard-interactivity
-pub const QuickTerminalKeyboardInteractivity = enum {
-    none,
-    @"on-demand",
-    exclusive,
-};
-
 /// See grapheme-width-method
 pub const GraphemeWidthMethod = enum {
     legacy,
@@ -9685,20 +8572,6 @@ pub const FreetypeLoadFlags = packed struct {
     monochrome: bool = false,
     autohint: bool = true,
     light: bool = true,
-};
-
-/// See linux-cgroup
-pub const LinuxCgroup = enum {
-    never,
-    always,
-    @"single-instance",
-};
-
-/// See async-backend
-pub const AsyncBackend = enum {
-    auto,
-    epoll,
-    io_uring,
 };
 
 /// See auto-updates
@@ -9761,8 +8634,6 @@ pub const BackgroundBlur = union(enum) {
             .radius => |v| v > 0,
 
             // We treat these as true because they both imply some blur!
-            // This has the effect of making the standard blur happen on
-            // Linux.
             .@"macos-glass-regular", .@"macos-glass-clear" => true,
         };
     }
@@ -9827,16 +8698,6 @@ pub const WindowDecoration = enum(c_int) {
     client,
     server,
     none,
-
-    /// Make this a valid gobject if we're in a GTK environment.
-    pub const getGObjectType = switch (build_config.app_runtime) {
-        .gtk => @import("gobject").ext.defineEnum(
-            WindowDecoration,
-            .{ .name = "GhosttyConfigWindowDecoration" },
-        ),
-
-        .none => void,
-    };
 
     pub fn parseCLI(input_: ?[]const u8) !WindowDecoration {
         const input = input_ orelse return .auto;
@@ -10658,27 +9519,6 @@ test "compatibility: scrollback-limit renamed to bytes" {
         std.math.maxInt(usize),
         cfg.@"scrollback-limit-bytes".value,
     );
-}
-
-test "compatibility: gtk-single-instance desktop" {
-    const testing = std.testing;
-    const alloc = testing.allocator;
-
-    {
-        var cfg = try Config.default(alloc);
-        defer cfg.deinit();
-        var it: TestIterator = .{ .data = &.{
-            "--gtk-single-instance=desktop",
-        } };
-        try cfg.loadIter(alloc, &it);
-
-        // We need to test this BEFORE finalize, because finalize will
-        // convert our detect to a real value.
-        try testing.expectEqual(
-            GtkSingleInstance.detect,
-            cfg.@"gtk-single-instance",
-        );
-    }
 }
 
 test "compatibility: removed cursor-invert-fg-bg" {

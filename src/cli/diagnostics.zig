@@ -104,7 +104,7 @@ pub const DiagnosticList = struct {
     const precompute_enabled = switch (build_config.artifact) {
         // We enable precompute for tests so that the logic is
         // semantically analyzed and run.
-        .exe, .wasm_module => builtin.is_test,
+        .exe => builtin.is_test,
 
         // We specifically want precompute for libghostty.
         .lib => true,

@@ -15,8 +15,6 @@ const build_config = @import("build_config.zig");
 const main = @import("main_ghostty.zig");
 const global = @import("global.zig");
 const apprt = @import("apprt.zig");
-const internal_os = @import("os/main.zig");
-const windows = @import("os/windows.zig");
 
 // Some comptime assertions that our C API depends on.
 comptime {
@@ -114,17 +112,12 @@ pub export fn ghostty_init(argc: usize, argv: [*][*:0]u8) c_int {
         .c = .{
             .argc = argc,
             .argv = argv,
-            .environ = if (std.process.Environ.Block == std.process.Environ.PosixBlock)
-                // Asserting libc means that we can fast-path all POSIX blocks
-                .{ .block = .{ .slice = std.c.environ[0..env_len: {
-                    var len: usize = 0;
-                    while (std.c.environ[len]) |_| : (len += 1) {}
-                    break :env_len len;
-                } :null] } }
-            else
-                // Anything that is not using PosixBlock is a global block for
-                // purposes of initialization.
-                .{ .block = .{ .use_global = true } },
+            // Asserting libc means that we can fast-path the POSIX block
+            .environ = .{ .block = .{ .slice = std.c.environ[0..env_len: {
+                var len: usize = 0;
+                while (std.c.environ[len]) |_| : (len += 1) {}
+                break :env_len len;
+            } :null] } },
         },
     }) catch |err| {
         std.log.err("failed to initialize ghostty error={}", .{err});
@@ -161,70 +154,10 @@ pub export fn ghostty_info() Info {
     };
 }
 
-/// Translate a string maintained by libghostty into the current
-/// application language. This will return the same string (same pointer)
-/// if no translation is found, so the pointer must be stable through
-/// the function call.
-///
-/// This should only be used for singular strings maintained by Ghostty.
-pub export fn ghostty_translate(msgid: [*:0]const u8) [*:0]const u8 {
-    return internal_os.i18n._(msgid);
-}
-
 /// Free a string allocated by Ghostty.
 pub export fn ghostty_string_free(str: String) void {
     str.deinit();
 }
-
-// On Windows, Zig's _DllMainCRTStartup does not initialize the MSVC C
-// runtime when targeting MSVC ABI. Without initialization, any C library
-// function that depends on CRT internal state (setlocale, malloc from C
-// dependencies, C++ constructors in glslang) crashes with null pointer
-// dereferences. Declaring DllMain causes Zig's start.zig to call it
-// during DLL_PROCESS_ATTACH/DETACH, and for MSVC we forward to the CRT
-// bootstrap functions from libvcruntime and libucrt (already linked).
-// For other ABIs (MinGW) the handler is a no-op since dllcrt2.obj already
-// handles CRT init; we still need `DllMain` declared so that Zig's
-// start.zig does not fall back to calling a non-function value.
-//
-// This is a workaround. Zig handles MinGW DLLs correctly (via dllcrt2.obj)
-// but not MSVC. No upstream issue tracks this exact gap as of 2026-03-26.
-// Closest: Codeberg ziglang/zig #30936 (reimplement crt0 code).
-// Remove this DllMain when Zig handles MSVC DLL CRT init natively.
-pub const DllMain = if (builtin.os.tag == .windows) struct {
-    const BOOL = windows.BOOL;
-    const HINSTANCE = windows.HINSTANCE;
-    const DWORD = windows.DWORD;
-    const LPVOID = windows.LPVOID;
-    const TRUE = windows.TRUE;
-    const FALSE = windows.FALSE;
-
-    const DLL_PROCESS_ATTACH: DWORD = 1;
-    const DLL_PROCESS_DETACH: DWORD = 0;
-
-    const __vcrt_initialize = @extern(*const fn () callconv(.c) c_int, .{ .name = "__vcrt_initialize" });
-    const __vcrt_uninitialize = @extern(*const fn (c_int) callconv(.c) c_int, .{ .name = "__vcrt_uninitialize" });
-    const __acrt_initialize = @extern(*const fn () callconv(.c) c_int, .{ .name = "__acrt_initialize" });
-    const __acrt_uninitialize = @extern(*const fn (c_int) callconv(.c) c_int, .{ .name = "__acrt_uninitialize" });
-
-    pub fn handler(_: HINSTANCE, fdwReason: DWORD, _: LPVOID) callconv(.winapi) BOOL {
-        // Only MSVC needs to bootstrap the CRT; MinGW handles it via dllcrt2.obj.
-        if (builtin.abi != .msvc) return TRUE;
-        switch (fdwReason) {
-            DLL_PROCESS_ATTACH => {
-                if (__vcrt_initialize() < 0) return FALSE;
-                if (__acrt_initialize() < 0) return FALSE;
-                return TRUE;
-            },
-            DLL_PROCESS_DETACH => {
-                _ = __acrt_uninitialize(1);
-                _ = __vcrt_uninitialize(1);
-                return TRUE;
-            },
-            else => return TRUE,
-        }
-    }
-}.handler else void;
 
 test "ghostty_string_s empty string" {
     const testing = std.testing;

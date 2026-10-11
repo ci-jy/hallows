@@ -55,8 +55,7 @@ fn decodePngWuffs(
 
 /// Fill a buffer with cryptographically secure random bytes. If null,
 /// the terminal's `std.Io` (`randomSecure`) is used. This is an override
-/// for embedders whose Io has no entropy source (e.g. wasm32-freestanding,
-/// where TinyIo degrades to `std.Io.failing`) or that want to control
+/// for embedders whose Io has no entropy source or that want to control
 /// the source; when set it is used on every target.
 ///
 /// This is used for secrets, so it must be a real CSPRNG. An error

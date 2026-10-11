@@ -7,7 +7,6 @@ const ArenaAllocator = std.heap.ArenaAllocator;
 const assert = @import("../quirks.zig").inlineAssert;
 const testing = std.testing;
 const posix = std.posix;
-const windows = @import("../os/windows.zig");
 const fastmem = @import("../fastmem.zig");
 const color = @import("color.zig");
 const hyperlink = @import("hyperlink.zig");
@@ -31,14 +30,10 @@ const log = std.log.scoped(.page);
 /// require page-aligned, zeroed memory obtained directly from the OS
 /// (not the Zig allocator) because the allocation fast-path is
 /// performance-critical and the OS guarantees zeroed pages.
-const PageAlloc = switch (builtin.os.tag) {
-    .windows => AllocWindows,
-    else => AllocPosix,
-};
-
-/// Allocate page-aligned, zeroed backing memory using mmap with
-/// MAP_PRIVATE | MAP_ANONYMOUS which guarantees zeroed pages.
-const AllocPosix = struct {
+///
+/// This uses mmap with MAP_PRIVATE | MAP_ANONYMOUS which guarantees
+/// zeroed pages.
+const PageAlloc = struct {
     pub fn alloc(n: usize) ![]align(std.heap.page_size_min) u8 {
         return try posix.mmap(
             null,
@@ -52,32 +47,6 @@ const AllocPosix = struct {
 
     pub fn free(mem: []align(std.heap.page_size_min) u8) void {
         posix.munmap(mem);
-    }
-};
-
-/// Allocate page-aligned, zeroed backing memory using VirtualAlloc with
-/// MEM_COMMIT | MEM_RESERVE which guarantees zeroed pages.
-const AllocWindows = struct {
-    pub fn alloc(n: usize) error{OutOfMemory}![]align(std.heap.page_size_min) u8 {
-        const addr = windows.exp.kernel32.VirtualAlloc(
-            null,
-            n,
-            windows.MEM_COMMIT | windows.MEM_RESERVE,
-            windows.PAGE_READWRITE,
-        ) orelse return error.OutOfMemory;
-
-        return @as(
-            [*]align(std.heap.page_size_min) u8,
-            @ptrCast(@alignCast(addr)),
-        )[0..n];
-    }
-
-    pub fn free(mem: []align(std.heap.page_size_min) u8) void {
-        _ = windows.exp.kernel32.VirtualFree(
-            @ptrCast(@alignCast(mem.ptr)),
-            0,
-            windows.MEM_RELEASE,
-        );
     }
 };
 
@@ -134,7 +103,6 @@ const cells_align: usize = @max(
     @alignOf(Cell),
     @min(
         std.atomic.cache_line,
-        // Cap it at page size for freestanding targets.
         std.heap.page_size_min,
     ),
 );
@@ -368,9 +336,9 @@ pub const Page = struct {
 
     /// A helper that can be used to assert the integrity of the page when
     /// runtime safety is enabled. This is a no-op when runtime safety is
-    /// disabled or the target is freestanding. This uses the libc allocator.
+    /// disabled. This uses the libc allocator.
     pub inline fn assertIntegrity(self: *const Page) void {
-        if (comptime build_options.slow_runtime_safety and builtin.os.tag != .freestanding) {
+        if (comptime build_options.slow_runtime_safety) {
             var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
             defer _ = debug_allocator.deinit();
             const alloc = debug_allocator.allocator();

@@ -83,19 +83,6 @@ fn runInner(alloc: Allocator, stderr: *std.Io.Writer) !u8 {
     const path = try configpkg.preferredDefaultFilePath(alloc);
     defer alloc.free(path);
 
-    // We don't currently support Windows because we use the exec syscall.
-    if (comptime builtin.os.tag == .windows) {
-        try stderr.print(
-            \\The `hallows +edit-config` command is not supported on Windows.
-            \\Please edit the configuration file manually at the following path:
-            \\
-            \\
-        ,
-            .{},
-        );
-        return 1;
-    }
-
     const command = internal_os.getConfigEditCommand(alloc, path, .{ .default_editor = .failure }) catch |err| {
         switch (err) {
             error.NoEditorConfigured => {

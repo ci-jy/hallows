@@ -1,14 +1,10 @@
 const std = @import("std");
-const builtin = @import("builtin");
 const build_config = @import("../build_config.zig");
-const assert = @import("../quirks.zig").inlineAssert;
 const objc = @import("objc");
 const Allocator = std.mem.Allocator;
 
 /// Verifies that the running macOS system version is at least the given version.
 pub fn isAtLeastVersion(major: i64, minor: i64, patch: i64) bool {
-    comptime assert(builtin.target.os.tag.isDarwin());
-
     const NSProcessInfo = objc.getClass("NSProcessInfo").?;
     const info = NSProcessInfo.msgSend(objc.Object, objc.sel("processInfo"), .{});
     return info.msgSend(bool, objc.sel("isOperatingSystemAtLeastVersion:"), .{
@@ -112,8 +108,6 @@ fn commonDir(
     directory: NSSearchPathDirectory,
     sub_path: []const u8,
 ) (error{AppleAPIFailed} || Allocator.Error)![]const u8 {
-    comptime assert(builtin.target.os.tag.isDarwin());
-
     const NSFileManager = objc.getClass("NSFileManager").?;
     const manager = NSFileManager.msgSend(
         objc.Object,
@@ -147,8 +141,6 @@ fn commonDir(
 }
 
 test "cacheDir paths" {
-    if (!builtin.target.os.tag.isDarwin()) return;
-
     const testing = std.testing;
     const alloc = testing.allocator;
 

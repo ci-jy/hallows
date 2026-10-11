@@ -6,14 +6,12 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const freetype = b.option(bool, "freetype", "Use Freetype") orelse false;
-    const backend_opengl3 = b.option(bool, "backend-opengl3", "OpenGL3 backend") orelse false;
     const backend_metal = b.option(bool, "backend-metal", "Metal backend") orelse false;
     const backend_osx = b.option(bool, "backend-osx", "OSX backend") orelse false;
 
     // Build options
     const options = b.addOptions();
     options.addOption(bool, "freetype", freetype);
-    options.addOption(bool, "backend_opengl3", backend_opengl3);
     options.addOption(bool, "backend_metal", backend_metal);
     options.addOption(bool, "backend_osx", backend_osx);
 
@@ -24,12 +22,7 @@ pub fn build(b: *std.Build) !void {
             .target = target,
             .optimize = optimize,
             .link_libc = true,
-            // On MSVC, we must not use linkLibCpp because Zig unconditionally
-            // passes -nostdinc++ and then adds its bundled libc++/libc++abi
-            // include paths, which conflict with MSVC's own C++ runtime
-            // headers. The MSVC SDK include directories (added via linkLibC)
-            // contain both C and C++ headers, so linkLibCpp is not needed.
-            .link_libcpp = target.result.abi != .msvc,
+            .link_libcpp = true,
         }),
         .linkage = .static,
     });
@@ -63,30 +56,12 @@ pub fn build(b: *std.Build) !void {
     if (freetype) try define_flags.appendSlice(b.allocator, &.{
         "-DIMGUI_ENABLE_FREETYPE=1",
     });
-    if (backend_opengl3) try define_flags.appendSlice(b.allocator, &.{
-        "-DZIGPKG_IMGUI_ENABLE_OPENGL3=1",
+    try define_flags.appendSlice(b.allocator, &.{
+        "-DIMGUI_IMPL_API=extern\t\"C\"",
     });
-    if (target.result.os.tag == .windows) {
-        try define_flags.appendSlice(b.allocator, &.{
-            "-DIMGUI_IMPL_API=extern\t\"C\"\t__declspec(dllexport)",
-        });
-    } else {
-        try define_flags.appendSlice(b.allocator, &.{
-            "-DIMGUI_IMPL_API=extern\t\"C\"",
-        });
-    }
 
     var all_flags: std.ArrayList([]const u8) = .empty;
     try all_flags.appendSlice(b.allocator, define_flags.items);
-    if (target.result.abi == .msvc) {
-        try all_flags.appendSlice(b.allocator, &.{
-            "-fno-sanitize=undefined",
-            "-fno-sanitize-trap=undefined",
-        });
-    }
-    if (target.result.os.tag == .freebsd or target.result.abi == .musl) {
-        try all_flags.append(b.allocator, "-fPIC");
-    }
 
     // Add the core Dear Imgui source files
     if (b.lazyDependency("imgui", .{})) |upstream| {
@@ -149,18 +124,6 @@ pub fn build(b: *std.Build) !void {
                 upstream.path("backends"),
                 "",
                 .{ .include_extensions = &.{"imgui_impl_osx.h"} },
-            );
-        }
-        if (backend_opengl3) {
-            lib.root_module.addCSourceFiles(.{
-                .root = upstream.path("backends"),
-                .files = &.{"imgui_impl_opengl3.cpp"},
-                .flags = all_flags.items,
-            });
-            lib.installHeadersDirectory(
-                upstream.path("backends"),
-                "",
-                .{ .include_extensions = &.{"imgui_impl_opengl3.h"} },
             );
         }
     }

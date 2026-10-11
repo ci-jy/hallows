@@ -19,9 +19,6 @@ const validate_config = @import("validate_config.zig");
 const crash_report = @import("crash_report.zig");
 const show_face = @import("show_face.zig");
 const boo = @import("boo.zig");
-const new_window = @import("new_window.zig");
-const new_tab = @import("new_tab.zig");
-const toggle_quick_terminal = @import("toggle_quick_terminal.zig");
 const global = @import("../global.zig");
 
 /// Special commands that can be invoked via CLI flags. These are all
@@ -72,15 +69,6 @@ pub const Action = enum {
 
     // Boo!
     boo,
-
-    // Use IPC to tell the running Ghostty to open a new window.
-    @"new-window",
-
-    // Use IPC to tell the running Ghostty to open a new tab.
-    @"new-tab",
-
-    // Use IPC to tell the running Ghostty to toggle the quick terminal.
-    @"toggle-quick-terminal",
 
     pub fn detectSpecialCase(arg: []const u8) ?SpecialCase(Action) {
         // If we see a "-e" and we haven't seen a command yet, then
@@ -163,9 +151,6 @@ pub const Action = enum {
             .@"crash-report" => try crash_report.run(alloc),
             .@"show-face" => try show_face.run(alloc),
             .boo => try boo.run(alloc),
-            .@"new-window" => try new_window.run(alloc),
-            .@"new-tab" => try new_tab.run(alloc),
-            .@"toggle-quick-terminal" => try toggle_quick_terminal.run(alloc),
         };
     }
 
@@ -205,9 +190,6 @@ pub const Action = enum {
                 .@"crash-report" => crash_report.Options,
                 .@"show-face" => show_face.Options,
                 .boo => boo.Options,
-                .@"new-window" => new_window.Options,
-                .@"new-tab" => new_tab.Options,
-                .@"toggle-quick-terminal" => toggle_quick_terminal.Options,
             };
         }
     }

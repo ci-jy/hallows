@@ -2845,18 +2845,12 @@ pub fn compressionActivity(self: *const Terminal) u64 {
 }
 
 /// The amount of compression work performed by `compress` before returning.
-///
-/// The declaration order is part of the libghostty-vt C ABI. Removed values
-/// must leave a `null` hole so later values retain their integer values.
 pub const CompressionMode = lib.Enum(lib.target, &.{
     "incremental",
     "full",
 });
 
 /// The scheduling result of a `compress` call.
-///
-/// The declaration order is part of the libghostty-vt C ABI. Removed values
-/// must leave a `null` hole so later values retain their integer values.
 pub const CompressionResult = lib.Enum(lib.target, &.{
     "unsupported",
     "pending",
