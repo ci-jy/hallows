@@ -16,7 +16,7 @@ pub const Options = struct {
     /// This is set by the CLI parser for deinit.
     _arena: ?ArenaAllocator = null,
 
-    /// If set, open up a new tab in a custom instance of Ghostty.
+    /// If set, open up a new tab in a custom instance of Hallows.
     class: ?[:0]const u8 = null,
 
     /// The surface to target.
@@ -108,16 +108,16 @@ pub const Options = struct {
 };
 
 /// The `new-tab` will use native platform IPC to open up a new tab in a running
-/// instance of Ghostty.
+/// instance of Hallows.
 ///
 /// If the `--class` flag is not set, the `new-tab` command will try and connect
-/// to a running instance of Ghostty based on what optimizations the Ghostty
+/// to a running instance of Hallows based on what optimizations the Hallows
 /// CLI was compiled with. Otherwise the `new-tab` command will try and contact
-/// a running Ghostty instance that was configured with the same `class` as was
+/// a running Hallows instance that was configured with the same `class` as was
 /// given on the command line.
 ///
 /// All of the arguments after the `+new-tab` argument (except for the `--class`
-/// and `--surface-id` flag) will be sent to the remote Ghostty instance and
+/// and `--surface-id` flag) will be sent to the remote Hallows instance and
 /// will be parsed as command line flags. These flags will override certain
 /// settings when creating the first surface in the new tab. Currently, only
 /// `--working-directory`, `--command`, `--shell-integration=<mode>`, and
@@ -128,27 +128,27 @@ pub const Options = struct {
 ///
 /// If `--working-directory` is found on the command line and is a relative
 /// path (i.e. doesn't start with `/`) it will be resolved to an absolute
-/// path relative to the current working directory that the `ghostty +new-tab`
+/// path relative to the current working directory that the `hallows +new-tab`
 /// command is run from. `~/` prefixes will also be expanded to the user's home
 /// directory.
 ///
 /// If `--working-directory` is _not_ found on the command line, the working
-/// directory that `ghostty +new-tab` is run from will be passed to Ghostty.
+/// directory that `hallows +new-tab` is run from will be passed to Hallows.
 ///
-/// GTK uses an application ID to identify instances of applications. If Ghostty
+/// GTK uses an application ID to identify instances of applications. If Hallows
 /// is compiled with release optimizations, the default application ID will be
-/// `com.mitchellh.ghostty`. If Ghostty is compiled with debug optimizations,
+/// `com.mitchellh.ghostty`. If Hallows is compiled with debug optimizations,
 /// the default application ID will be `com.mitchellh.ghostty-debug`.  The
 /// `class` configuration entry can be used to set up a custom application
 /// ID. The class name must follow the requirements defined [in the GTK
 /// documentation](https://docs.gtk.org/gio/type_func.Application.id_is_valid.html)
-/// or it will be ignored and Ghostty will use the default as defined above.
+/// or it will be ignored and Hallows will use the default as defined above.
 ///
-/// On GTK, D-Bus activation must be properly configured. Ghostty does not need
+/// On GTK, D-Bus activation must be properly configured. Hallows does not need
 /// to be running for this to open a new tab, making it suitable for binding
 /// to keys in your window manager (if other methods for configuring global
 /// shortcuts are unavailable). D-Bus will handle launching a new instance
-/// of Ghostty if it is not already running. See the Ghostty website for
+/// of Hallows if it is not already running. See the Hallows website for
 /// information on properly configuring D-Bus activation.
 ///
 /// Only supported on GTK.
@@ -156,9 +156,9 @@ pub const Options = struct {
 /// Flags:
 ///
 ///   * `--class=<class>`: If set, open up a new window in a custom instance of
-///     Ghostty. The class must be a valid GTK application ID.
+///     Hallows. The class must be a valid GTK application ID.
 ///
-///   * `--surface-id=<surface id>`: If set, specifies a Ghostty surface ID.
+///   * `--surface-id=<surface id>`: If set, specifies a Hallows surface ID.
 ///     This is used to identify the window that the new tab will be added to.
 ///     If the surface ID is not specified or is `0` the currently focused
 ///     surface will be used.
@@ -169,7 +169,7 @@ pub const Options = struct {
 ///     which shell to use. See the main configuration documentation for
 ///     supported values.
 ///
-///   * `--working-directory=<directory>`: The working directory to pass to Ghostty.
+///   * `--working-directory=<directory>`: The working directory to pass to Hallows.
 ///
 ///   * `--title`: A title that will override the title of the first surface in
 ///     the new tab. The title override may be edited or removed later.
@@ -247,7 +247,7 @@ fn runArgs(
     const surface_id = opts.@"surface-id" orelse surface: {
         var env = global.environMap() catch break :surface 0;
         defer env.deinit();
-        const e = env.get("GHOSTTY_SURFACE_ID") orelse break :surface 0;
+        const e = env.get("HALLOWS_SURFACE_ID") orelse break :surface 0;
         break :surface std.fmt.parseUnsigned(u64, e, 0) catch break :surface 0;
     };
 

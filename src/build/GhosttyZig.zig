@@ -56,6 +56,37 @@ pub fn retarget(
     );
 }
 
+/// Create a new GhosttyZig with modules for another operating system, for
+/// programs we ship that run elsewhere, such as `hallows` (the
+/// remote half of `+ssh --persist`). Unlike `retarget`, the module names
+/// include the OS, so building for the same architecture on another OS
+/// doesn't collide with `retarget`'s modules.
+pub fn initForOs(
+    b: *std.Build,
+    cfg: *const Config,
+    deps: *const SharedDeps,
+    target: std.Build.ResolvedTarget,
+) !GhosttyZig {
+    const retargeted_config = try b.allocator.create(Config);
+    retargeted_config.* = cfg.*;
+    retargeted_config.target = target;
+
+    const retargeted_deps = try b.allocator.create(SharedDeps);
+    retargeted_deps.* = try deps.retarget(b, target);
+
+    const suffix = b.fmt("{s}-{s}", .{
+        @tagName(target.result.cpu.arch),
+        @tagName(target.result.os.tag),
+    });
+    return initInner(
+        b,
+        retargeted_config,
+        retargeted_deps,
+        b.fmt("ghostty-vt-{s}", .{suffix}),
+        b.fmt("ghostty-vt-c-{s}", .{suffix}),
+    );
+}
+
 fn initInner(
     b: *std.Build,
     cfg: *const Config,

@@ -441,7 +441,7 @@ __bp_hook_preexec_into_debug() {
 
     # Adjust our HISTCONTROL Variable if needed.
     #
-    # GHOSTTY: Don't modify HISTCONTROL (#2269). This only improves the
+    # HALLOWS: Don't modify HISTCONTROL (#2269). This only improves the
     # accuracy of the command passed to preexec functions when the user has
     # ignorespace set. Our bash >= 4.4 integration reads `history 1` without
     # adjusting HISTCONTROL and accepts the same inaccuracy, so keep the

@@ -5,17 +5,17 @@ const Config = @import("../config/Config.zig");
 pub const syntax = comptimeGenSyntax();
 pub const ftdetect =
     \\" Vim filetype detect file
-    \\" Language: Ghostty config file
+    \\" Language: Hallows config file
     \\" Maintainer: Ghostty <https://github.com/ghostty-org/ghostty>
     \\"
     \\" THIS FILE IS AUTO-GENERATED
     \\
-    \\au BufRead,BufNewFile */ghostty/config,*/*.ghostty/config,*/ghostty/themes/*,*.ghostty setf ghostty
+    \\au BufRead,BufNewFile */hallows/config,*/*.ghostty/config,*/hallows/themes/*,*.ghostty setf hallows
     \\
 ;
 pub const ftplugin =
     \\" Vim filetype plugin file
-    \\" Language: Ghostty config file
+    \\" Language: Hallows config file
     \\" Maintainer: Ghostty <https://github.com/ghostty-org/ghostty>
     \\"
     \\" THIS FILE IS AUTO-GENERATED
@@ -31,20 +31,20 @@ pub const ftplugin =
     \\" Use syntax keywords for completion
     \\setlocal omnifunc=syntaxcomplete#Complete
     \\
-    \\" Ask ghostty to explain config keywords
-    \\setlocal keywordprg=ghostty\ +explain-config
+    \\" Ask hallows to explain config keywords
+    \\setlocal keywordprg=hallows\ +explain-config
     \\
     \\let b:undo_ftplugin = 'setl cms< isk< ofu< kp<'
     \\
     \\if !exists('current_compiler')
-    \\  compiler ghostty
+    \\  compiler hallows
     \\  let b:undo_ftplugin .= " makeprg< errorformat<"
     \\endif
     \\
 ;
 pub const compiler =
     \\" Vim compiler file
-    \\" Language: Ghostty config file
+    \\" Language: Hallows config file
     \\" Maintainer: Ghostty <https://github.com/ghostty-org/ghostty>
     \\"
     \\" THIS FILE IS AUTO-GENERATED
@@ -52,9 +52,9 @@ pub const compiler =
     \\if exists("current_compiler")
     \\  finish
     \\endif
-    \\let current_compiler = "ghostty"
+    \\let current_compiler = "hallows"
     \\
-    \\CompilerSet makeprg=ghostty\ +validate-config\ --config-file=%:S
+    \\CompilerSet makeprg=hallows\ +validate-config\ --config-file=%:S
     \\CompilerSet errorformat=%f:%l:%m,%m
     \\
 ;
@@ -78,7 +78,7 @@ fn comptimeGenSyntax() []const u8 {
 fn writeSyntax(writer: *std.Io.Writer) !void {
     try writer.writeAll(
         \\" Vim syntax file
-        \\" Language: Ghostty config file
+        \\" Language: Hallows config file
         \\" Maintainer: Ghostty <https://github.com/ghostty-org/ghostty>
         \\"
         \\" THIS FILE IS AUTO-GENERATED
@@ -87,7 +87,7 @@ fn writeSyntax(writer: *std.Io.Writer) !void {
         \\  finish
         \\endif
         \\
-        \\let b:current_syntax = 'ghostty'
+        \\let b:current_syntax = 'hallows'
         \\
         \\let s:cpo_save = &cpo
         \\set cpo&vim

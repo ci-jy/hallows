@@ -49,7 +49,7 @@ pub fn init(
     };
 
     const env = b.graph.environ_map;
-    const app_path = b.fmt("macos/build/{s}/Ghostty.app", .{xc_config});
+    const app_path = b.fmt("macos/build/{s}/Hallows.app", .{xc_config});
 
     // Our step to build the Ghostty macOS app.
     const build = build: {
@@ -153,10 +153,10 @@ pub fn init(
 
         // This overrides our default behavior and forces logs to show
         // up on stderr (in addition to the centralized macOS log).
-        open.setEnvironmentVariable("GHOSTTY_LOG", "stderr,macos");
+        open.setEnvironmentVariable("HALLOWS_LOG", "stderr,macos");
 
         // Configure how we're launching
-        open.setEnvironmentVariable("GHOSTTY_MAC_LAUNCH_SOURCE", "zig_run");
+        open.setEnvironmentVariable("HALLOWS_MAC_LAUNCH_SOURCE", "zig_run");
 
         if (b.args) |args| {
             open.addArgs(args);

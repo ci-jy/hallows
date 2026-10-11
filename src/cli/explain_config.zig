@@ -12,12 +12,12 @@ const global = @import("../global.zig");
 pub const Options = struct {
     /// The config option to explain. For example:
     ///
-    ///   ghostty +explain-config --option=font-size
+    ///   hallows +explain-config --option=font-size
     option: ?[]const u8 = null,
 
     /// The keybind action to explain. For example:
     ///
-    ///   ghostty +explain-config --keybind=copy_to_clipboard
+    ///   hallows +explain-config --keybind=copy_to_clipboard
     keybind: ?[]const u8 = null,
 
     pub fn deinit(self: Options) void {
@@ -32,14 +32,14 @@ pub const Options = struct {
 };
 
 /// The `explain-config` command prints the documentation for a single
-/// Ghostty configuration option or keybind action.
+/// Hallows configuration option or keybind action.
 ///
 /// Examples:
 ///
-///   ghostty +explain-config font-size
-///   ghostty +explain-config copy_to_clipboard
-///   ghostty +explain-config --option=font-size
-///   ghostty +explain-config --keybind=copy_to_clipboard
+///   hallows +explain-config font-size
+///   hallows +explain-config copy_to_clipboard
+///   hallows +explain-config --option=font-size
+///   hallows +explain-config --keybind=copy_to_clipboard
 ///
 /// Flags:
 ///
@@ -79,9 +79,9 @@ pub fn run(alloc: Allocator) !u8 {
         var stderr: std.Io.File = .stderr();
         var buffer: [4096]u8 = undefined;
         var stderr_writer = stderr.writer(global.io(), &buffer);
-        try stderr_writer.interface.writeAll("Usage: ghostty +explain-config <option>\n");
-        try stderr_writer.interface.writeAll("       ghostty +explain-config --option=<option>\n");
-        try stderr_writer.interface.writeAll("       ghostty +explain-config --keybind=<action>\n");
+        try stderr_writer.interface.writeAll("Usage: hallows +explain-config <option>\n");
+        try stderr_writer.interface.writeAll("       hallows +explain-config --option=<option>\n");
+        try stderr_writer.interface.writeAll("       hallows +explain-config --keybind=<action>\n");
         try stderr_writer.end();
         return 1;
     };

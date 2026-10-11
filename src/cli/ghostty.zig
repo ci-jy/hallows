@@ -50,7 +50,7 @@ pub const Action = enum {
     /// List keybind actions
     @"list-actions",
 
-    /// Wrap `ssh` to configure Ghostty terminal integration on remote hosts
+    /// Wrap `ssh` to configure Hallows terminal integration on remote hosts
     ssh,
 
     /// Manage SSH terminfo cache for automatic remote host setup

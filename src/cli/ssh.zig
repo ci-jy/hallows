@@ -13,14 +13,14 @@ const global = @import("../global.zig");
 const log = std.log.scoped(.ssh);
 
 const usage =
-    \\Usage: ghostty +ssh [flags] [--] <ssh args...>
+    \\Usage: hallows +ssh [flags] [--] <ssh args...>
     \\
     \\Flags:
     \\  --forward-env[=bool]  Enable TERM / SendEnv forwarding. Default: true.
-    \\  --terminfo[=bool]     Install Ghostty terminfo on first connect. Default: true.
+    \\  --terminfo[=bool]     Install Hallows terminfo on first connect. Default: true.
     \\  --cache[=bool]        Use the terminfo install cache. Default: true.
-    \\  --persist[=bool]      Run interactive logins in tmux and reconnect
-    \\                        automatically. Default: false.
+    \\  --persist[=bool]      Keep interactive logins alive across dropped
+    \\                        connections and reconnect. Default: false.
     \\  --ssh=<path>          Path to the ssh binary. Default: first `ssh` on PATH.
     \\  --verbose             Print +ssh status lines to stderr.
     \\  --help                Show full help.
@@ -104,7 +104,7 @@ pub const Options = struct {
     }
 };
 
-/// Wrap `ssh` to automatically configure Ghostty terminal integration on
+/// Wrap `ssh` to automatically configure Hallows terminal integration on
 /// remote hosts.
 ///
 /// Any arguments that aren't recognized as `+ssh` flags are passed to
@@ -113,14 +113,14 @@ pub const Options = struct {
 /// has no long flags, and `+ssh` defines no short flags, so there's
 /// nothing to collide.
 ///
-/// This is typically called via Ghostty's shell integration. When
+/// This is typically called via Hallows' shell integration. When
 /// `shell-integration-features` includes `ssh-env` or `ssh-terminfo`,
 /// each shell defines an `ssh` function that runs:
 ///
-///     ghostty +ssh <flags> -- "$@"
+///     hallows +ssh <flags> -- "$@"
 ///
-/// You can also run `ghostty +ssh` directly, or alias it yourself (e.g.
-/// `alias ssh='ghostty +ssh --'`) if you prefer not to use the shell
+/// You can also run `hallows +ssh` directly, or alias it yourself (e.g.
+/// `alias ssh='hallows +ssh --'`) if you prefer not to use the shell
 /// integration.
 ///
 /// `+ssh` performs up to two pieces of setup before launching `ssh`:
@@ -128,17 +128,17 @@ pub const Options = struct {
 ///   1. **Environment forwarding** (`--forward-env`). Sets `TERM` to
 ///      `xterm-256color` and requests `SendEnv` forwarding of
 ///      `COLORTERM`, `TERM_PROGRAM`, and `TERM_PROGRAM_VERSION` so the
-///      remote shell can still detect that it's running inside Ghostty.
+///      remote shell can still detect that it's running inside Hallows.
 ///      The remote `sshd_config` must list these in `AcceptEnv` for
 ///      forwarding to succeed.
 ///
 ///   2. **Terminfo install** (`--terminfo`). On the first connection to a
-///      given destination, installs Ghostty's embedded terminfo entry on the
+///      given destination, installs Hallows' embedded terminfo entry on the
 ///      remote host using `ssh tic -x -` over a shared `ControlMaster`
 ///      connection. Successful installs are cached
-///      (see `ghostty +ssh-cache`) so subsequent connections skip this
+///      (see `hallows +ssh-cache`) so subsequent connections skip this
 ///      step. When terminfo is successfully installed or already cached,
-///      `TERM` is set to `xterm-ghostty` instead of `xterm-256color`.
+///      `TERM` is set to `xterm-hallows` instead of `xterm-256color`.
 ///
 /// If `--terminfo` install fails (e.g. `tic` not available on the
 /// remote, filesystem permissions), a warning is logged and the
@@ -149,22 +149,26 @@ pub const Options = struct {
 /// such as when the computer sleeps, the network changes, or the remote
 /// `sshd`/`tailscaled` restarts:
 ///
-///   * On the first connection to a destination, a small helper script is
-///     installed as `~/.local/share/ghostty/ssh-persist` on the remote
-///     host (cached like the terminfo install). The remote host needs
-///     `tmux`; without it, `+ssh` falls back to a normal login.
+///   * On the first connection to a destination, `hallows-persist`, a
+///     small program that ships with Hallows, is copied to the remote host
+///     as `~/.local/share/hallows/hallows-persist` (cached like the
+///     terminfo install). Builds are available for Linux on x86_64 and
+///     aarch64; on other hosts, `+ssh` falls back to a normal login.
 ///
-///   * The login attaches to tmux. The tmux server is started in a systemd
-///     user scope when available, so it outlives the ssh session's cgroup,
-///     and Ghostty's terminal features are enabled in tmux.
+///   * The login shell runs in a session that `hallows-persist` keeps
+///     alive on the remote host, started in a systemd user scope when
+///     available so it outlives the ssh session's cgroup. Unlike tmux, it
+///     isn't a terminal of its own: programs talk to Hallows directly, so
+///     everything Hallows supports keeps working, and scrollback stays in
+///     Hallows.
 ///
-///   * When the connection drops, `+ssh` reconnects on its own and lands
-///     on the tmux session this terminal was last showing, even after
-///     switching sessions inside tmux. Reconnect progress is shown in the
-///     window title only. Detaching or exiting tmux ends `+ssh` as usual.
+///   * When the connection drops, `+ssh` reconnects on its own to the same
+///     session and redraws the screen, including anything printed while
+///     disconnected. Reconnect progress is shown in the window title only.
 ///
-/// Remembering session switches across reconnects needs a Linux remote;
-/// elsewhere, reconnects attach to the most recently used session.
+///   * A new `ssh` to the same host picks up the most recently detached
+///     session, with its scrollback, or starts a new one. Exiting the
+///     shell ends the session.
 ///
 /// Flags:
 ///
@@ -174,15 +178,15 @@ pub const Options = struct {
 ///   * `--terminfo=<bool>`: Enable automatic terminfo install on first
 ///     connection. Default: `true`.
 ///
-///   * `--persist=<bool>`: Run interactive logins inside tmux and
-///     reconnect automatically when the connection drops (see above).
+///   * `--persist=<bool>`: Keep interactive logins alive across dropped
+///     connections and reconnect automatically (see above).
 ///     Default: `false`.
 ///
 ///   * `--cache=<bool>`: Use the terminfo install cache. Default: `true`.
 ///     When `false`, both the cache read (skip-if-installed) and the
 ///     cache write (record-on-success) are bypassed, and every
 ///     connection performs the install. To one-shot reinstall a single
-///     host while keeping the cache in use, prefer `ghostty +ssh-cache
+///     host while keeping the cache in use, prefer `hallows +ssh-cache
 ///     --remove=<host>` followed by a normal connection.
 ///
 ///   * `--ssh=<path>`: Path to the `ssh` binary to execute. Default: the
@@ -194,19 +198,19 @@ pub const Options = struct {
 /// Examples:
 ///
 ///     # Basic invocation using defaults:
-///     ghostty +ssh user@example.com
+///     hallows +ssh user@example.com
 ///
-///     # Forward Ghostty env vars but skip the terminfo install:
-///     ghostty +ssh --terminfo=false user@example.com
+///     # Forward Hallows env vars but skip the terminfo install:
+///     hallows +ssh --terminfo=false user@example.com
 ///
 ///     # `ssh` flags (short-form `-p`, etc.) pass through unchanged:
-///     ghostty +ssh -p 2222 -i ~/.ssh/id_ed25519 user@example.com
+///     hallows +ssh -p 2222 -i ~/.ssh/id_ed25519 user@example.com
 ///
 ///     # Use `--` explicitly if your ssh args might collide with our flags:
-///     ghostty +ssh -- --some-rare-ssh-arg user@example.com
+///     hallows +ssh -- --some-rare-ssh-arg user@example.com
 ///
 /// Pass `--verbose` to see what `+ssh` is doing. For cache inspection
-/// and management, see `ghostty +ssh-cache`.
+/// and management, see `hallows +ssh-cache`.
 ///
 /// Available since: 1.4.0
 pub fn run(alloc_gpa: Allocator) !u8 {
@@ -281,7 +285,7 @@ fn runInner(
         };
 
         const cache: ?DiskCache = if (opts.cache) cache: {
-            const path = DiskCache.defaultPath(alloc, "ghostty") catch |err| {
+            const path = DiskCache.defaultPath(alloc, "hallows") catch |err| {
                 warnPrint(stderr, "ghostty terminfo cache unavailable: {t}", .{err});
                 break :session .{ .term = "xterm-256color" };
             };
@@ -304,7 +308,7 @@ fn runInner(
 
             if (cached) {
                 verbosePrint(opts, stderr, "dest: {s} (cached, skipping install)", .{dest});
-                break :session .{ .term = "xterm-ghostty" };
+                break :session .{ .term = "xterm-hallows" };
             } else {
                 verbosePrint(opts, stderr, "dest: {s} (not cached, will install)", .{dest});
             }
@@ -312,7 +316,7 @@ fn runInner(
             verbosePrint(opts, stderr, "dest: {s} (cache disabled, will install)", .{dest});
         }
 
-        stderr.print("Setting up xterm-ghostty terminfo on {s}...\n", .{dest}) catch {};
+        stderr.print("Setting up xterm-hallows terminfo on {s}...\n", .{dest}) catch {};
         stderr.flush() catch {};
 
         installRemoteTerminfo(alloc, opts, stderr) catch |err| {
@@ -320,7 +324,7 @@ fn runInner(
             break :session .{ .term = "xterm-256color" };
         };
         break :session .{
-            .term = "xterm-ghostty",
+            .term = "xterm-hallows",
             .to_cache = if (cache) |c| .{ .cache = c, .dest = dest } else null,
         };
     };
@@ -531,7 +535,7 @@ fn parseDestination(alloc: Allocator, stdout: []const u8) ?[]const u8 {
     return std.fmt.allocPrint(alloc, "{s}@{s}:{s}", .{ user, host, port }) catch null;
 }
 
-/// Install Ghostty's terminfo on the remote host over a short-lived SSH
+/// Install Hallows' terminfo on the remote host over a short-lived SSH
 /// ControlMaster connection. The master tears down with the client
 /// (`ControlPersist=no`) so no socket lingers.
 fn installRemoteTerminfo(
@@ -548,7 +552,7 @@ fn installRemoteTerminfo(
     // ControlPath as the bind address for a Unix domain socket; macOS
     // limits sockaddr_un.sun_path to ~104 bytes, so keeping the path
     // short leaves margin.
-    const control_path = try internal_os.randomTmpPath(alloc, "ghostty-ssh-");
+    const control_path = try internal_os.randomTmpPath(alloc, "hallows-ssh-");
     const control_path_opt = try std.fmt.allocPrint(
         alloc,
         "ControlPath={s}",
@@ -607,43 +611,29 @@ fn installRemoteTerminfo(
     checkExit(term, "terminfo install") catch return error.InstallFailed;
 }
 
-/// The remote half of `--persist`, installed on each destination.
-const persist_script = @embedFile("ssh_persist.sh");
+/// Where `hallows-persist`, the remote half of `--persist` (see
+/// src/hallows_persist/main.zig), lives on a remote host, relative to `$HOME`.
+const persist_remote_path = ".local/share/hallows/hallows-persist";
 
-/// Identifies `persist_script` in the persist cache, so hosts get the new
-/// script when it changes.
-const persist_version = version: {
-    @setEvalBranchQuota(100_000);
-    break :version std.fmt.comptimePrint(
-        "{x}",
-        .{std.hash.Wyhash.hash(0, persist_script)},
-    );
+/// The remote platforms we ship a `hallows-persist` build for, as
+/// `uname -sm` names them, and the directory under
+/// `<resources>/hallows-persist` holding that build.
+const persist_platforms = [_]struct { uname: []const u8, dir: []const u8 }{
+    .{ .uname = "Linux x86_64", .dir = "x86_64-linux" },
+    .{ .uname = "Linux aarch64", .dir = "aarch64-linux" },
+    .{ .uname = "Linux arm64", .dir = "aarch64-linux" },
 };
 
-/// Where `persist_script` lives on the remote, relative to `$HOME`.
-const persist_remote_path = ".local/share/ghostty/ssh-persist";
-
-/// Fed to `sh -s` on the remote to install `persist_script`. Exits with 3
-/// if the remote doesn't have tmux.
-const persist_install_script =
-    \\set -e
-    \\command -v tmux >/dev/null 2>&1 || exit 3
-    \\f="$HOME/
-++ persist_remote_path ++
-    \\"
-    \\mkdir -p "$(dirname "$f")"
-    \\cat >"$f.tmp" <<'__GHOSTTY_SSH_PERSIST__'
-    \\
-++ persist_script ++
-    \\__GHOSTTY_SSH_PERSIST__
-    \\chmod 755 "$f.tmp"
-    \\mv -f "$f.tmp" "$f"
-    \\
-;
+/// Copies `hallows-persist` from stdin into place on the remote host. Run
+/// via `sh -c` so it works whatever the remote login shell is.
+const persist_install_command =
+    "sh -c 'f=\"$HOME/" ++ persist_remote_path ++ "\" && mkdir -p \"${f%/*}\" && " ++
+    "cat >\"$f.tmp\" && chmod 755 \"$f.tmp\" && mv -f \"$f.tmp\" \"$f\"'";
 
 /// Decide whether this invocation runs persistently and, if so, make sure
-/// the remote helper is installed. Returns the destination when the
-/// session should run persistently, or null to run plain ssh.
+/// `hallows-persist` is installed on the remote host. Returns the
+/// destination when the session should run persistently, or null to run
+/// plain ssh.
 fn setupPersist(
     alloc: Allocator,
     opts: *const Options,
@@ -676,6 +666,11 @@ fn setupPersist(
         return null;
     };
 
+    const builds = persistBuilds(alloc) orelse {
+        warnPrint(stderr, "hallows-persist is missing from this build; not persisting the session", .{});
+        return null;
+    };
+
     const cache: ?DiskCache = if (opts.cache) cache: {
         const path = persistCachePath(alloc) catch |err| {
             warnPrint(stderr, "ghostty persist cache unavailable: {t}", .{err});
@@ -685,7 +680,7 @@ fn setupPersist(
     } else null;
 
     if (cache) |c| {
-        const cached = c.contains(alloc, dest, persist_version) catch |err| cached: {
+        const cached = c.contains(alloc, dest, builds.version) catch |err| cached: {
             if (DiskCache.isFailure(err)) warnPrint(
                 stderr,
                 "unable to read the cache '{s}': {t}",
@@ -702,12 +697,13 @@ fn setupPersist(
     stderr.print("Setting up persistent sessions on {s}...\n", .{dest}) catch {};
     stderr.flush() catch {};
 
-    installPersistScript(alloc, opts, stderr) catch |err| {
+    var platform: []const u8 = "";
+    installPersist(alloc, opts, stderr, builds, &platform) catch |err| {
         switch (err) {
-            error.NoTmux => warnPrint(
+            error.UnsupportedPlatform => warnPrint(
                 stderr,
-                "tmux is not installed on {s}; connecting without a persistent session",
-                .{dest},
+                "persistent sessions aren't available for {s} ({s}); connecting without one",
+                .{ dest, platform },
             ),
             else => warnPrint(
                 stderr,
@@ -721,7 +717,7 @@ fn setupPersist(
     if (cache) |c| c.add(
         alloc,
         dest,
-        persist_version,
+        builds.version,
         std.Io.Timestamp.now(io, .real).toSeconds(),
     ) catch |err| {
         if (DiskCache.isFailure(err)) warnPrint(
@@ -734,27 +730,92 @@ fn setupPersist(
     return dest;
 }
 
+/// The `hallows-persist` builds that ship with Hallows.
+const PersistBuilds = struct {
+    /// `<resources>/hallows-persist`.
+    dir: []const u8,
+
+    /// Identifies this set of builds in the persist cache, so hosts get the
+    /// new build when Hallows updates it.
+    version: []const u8,
+};
+
+fn persistBuilds(alloc: Allocator) ?PersistBuilds {
+    const resources = global.resourcesDir().app() orelse return null;
+    const dir = std.fs.path.join(alloc, &.{ resources, "hallows-persist" }) catch return null;
+
+    var hasher: std.hash.Wyhash = .init(0);
+    var found = false;
+    for (persist_platforms) |platform| {
+        const data = readPersistBuild(alloc, dir, platform.dir) orelse continue;
+        hasher.update(platform.dir);
+        hasher.update(data);
+        found = true;
+    }
+    if (!found) return null;
+
+    return .{
+        .dir = dir,
+        .version = std.fmt.allocPrint(alloc, "{x}", .{hasher.final()}) catch return null,
+    };
+}
+
+fn readPersistBuild(alloc: Allocator, dir: []const u8, platform: []const u8) ?[]const u8 {
+    const path = std.fs.path.join(alloc, &.{ dir, platform, "hallows-persist" }) catch return null;
+    return std.Io.Dir.cwd().readFileAlloc(
+        global.io(),
+        path,
+        alloc,
+        .limited(64 * 1024 * 1024),
+    ) catch null;
+}
+
 /// The persist cache sits next to the terminfo cache. It records which
-/// version of `persist_script` each destination has.
+/// version of `hallows-persist` each destination has.
 fn persistCachePath(alloc: Allocator) ![]const u8 {
-    const terminfo_cache = try DiskCache.defaultPath(alloc, "ghostty");
+    const terminfo_cache = try DiskCache.defaultPath(alloc, "hallows");
     const dir = std.fs.path.dirname(terminfo_cache) orelse return error.XdgLookupFailed;
     return std.fs.path.join(alloc, &.{ dir, "ssh_persist_cache" });
 }
 
-fn installPersistScript(
+/// Copy the build of `hallows-persist` the remote host needs to it. On
+/// `error.UnsupportedPlatform`, `platform` is what the host reported.
+fn installPersist(
     alloc: Allocator,
     opts: *const Options,
     stderr: *std.Io.Writer,
+    builds: PersistBuilds,
+    platform: *[]const u8,
 ) !void {
+    const io = global.io();
+
+    const uname_argv = try std.mem.concat(alloc, []const u8, &.{
+        &.{opts.ssh},
+        opts._ssh_args.items,
+        &.{"uname -sm"},
+    });
+    verbosePrint(opts, stderr, "exec: {f}", .{Joined{ .items = uname_argv }});
+    const uname = std.process.run(alloc, io, .{ .argv = uname_argv }) catch |err| {
+        log.warn("uname spawn failed: {}", .{err});
+        return error.InstallFailed;
+    };
+    checkExit(uname.term, "uname") catch return error.InstallFailed;
+    platform.* = std.mem.trim(u8, uname.stdout, " \t\r\n");
+
+    const dir = for (persist_platforms) |p| {
+        if (std.mem.eql(u8, p.uname, platform.*)) break p.dir;
+    } else return error.UnsupportedPlatform;
+    const data = readPersistBuild(alloc, builds.dir, dir) orelse
+        return error.UnsupportedPlatform;
+
     const argv = try std.mem.concat(alloc, []const u8, &.{
         &.{opts.ssh},
         opts._ssh_args.items,
-        &.{"sh -s"},
+        &.{persist_install_command},
     });
     verbosePrint(opts, stderr, "exec: {f}", .{Joined{ .items = argv }});
 
-    var child = std.process.spawn(global.io(), .{
+    var child = std.process.spawn(io, .{
         .argv = argv,
         .stdin = .pipe,
         .stdout = .ignore,
@@ -765,24 +826,20 @@ fn installPersistScript(
     };
 
     if (child.stdin) |stdin| {
-        stdin.writeStreamingAll(global.io(), persist_install_script) catch {};
-        stdin.close(global.io());
+        stdin.writeStreamingAll(io, data) catch {};
+        stdin.close(io);
         child.stdin = null;
     }
 
-    const term = child.wait(global.io()) catch |err| {
+    const term = child.wait(io) catch |err| {
         log.warn("persist install wait failed: {}", .{err});
         return error.InstallFailed;
     };
-    switch (term) {
-        .exited => |rc| if (rc == 3) return error.NoTmux,
-        else => {},
-    }
     checkExit(term, "persist install") catch return error.InstallFailed;
 }
 
-/// Run the session in tmux on the remote, reconnecting to the same tmux
-/// session whenever the connection drops, until tmux exits or detaches.
+/// Run the session under `hallows-persist` on the remote, reconnecting to
+/// it whenever the connection drops, until the session ends.
 fn runPersistent(
     alloc: Allocator,
     opts: *const Options,
@@ -800,7 +857,7 @@ fn runPersistent(
     // ssh runs LocalCommand only once the connection is up, so this marker
     // tells a dropped session apart from one that never connected (unknown
     // host, failed auth, ...), which we must not retry.
-    const marker = try internal_os.randomTmpPath(alloc, "ghostty-ssh-");
+    const marker = try internal_os.randomTmpPath(alloc, "hallows-ssh-");
     defer std.Io.Dir.cwd().deleteFile(io, marker) catch {};
     const local_command = try std.fmt.allocPrint(
         alloc,
@@ -808,16 +865,23 @@ fn runPersistent(
         .{marker},
     );
 
-    // Run via `sh -c` so it works whatever the remote login shell is.
+    // Run via `sh -c` so it works whatever the remote login shell is. After
+    // a reconnect, this terminal still shows the session, so only its
+    // screen needs redrawing.
     const remote_command = try std.fmt.allocPrint(
         alloc,
         "sh -c 'exec \"$HOME/{s}\" attach {s}'",
         .{ persist_remote_path, &tag },
     );
+    const reconnect_command = try std.fmt.allocPrint(
+        alloc,
+        "sh -c 'exec \"$HOME/{s}\" attach {s} --reconnect'",
+        .{ persist_remote_path, &tag },
+    );
 
     // The keepalives notice a dead connection within seconds (e.g. after
     // waking from sleep) rather than waiting on TCP timeouts.
-    const argv = try std.mem.concat(alloc, []const u8, &.{
+    const args = try std.mem.concat(alloc, []const u8, &.{
         prefix,
         &.{"-t"},
         &.{
@@ -828,8 +892,9 @@ fn runPersistent(
             "-o", local_command,
         },
         opts._ssh_args.items,
-        &.{remote_command},
     });
+    const argv = try std.mem.concat(alloc, []const u8, &.{ args, &.{remote_command} });
+    const reconnect_argv = try std.mem.concat(alloc, []const u8, &.{ args, &.{reconnect_command} });
     verbosePrint(opts, stderr, "exec: {f}", .{Joined{ .items = argv }});
 
     var stdout_buffer: [256]u8 = undefined;
@@ -841,20 +906,24 @@ fn runPersistent(
     var dropped_at: i64 = 0;
     while (true) {
         std.Io.Dir.cwd().deleteFile(io, marker) catch {};
-        const exit_code = try childExecFiltered(argv, stderr, connected);
+        const exit_code = try childExecFiltered(
+            if (connected) reconnect_argv else argv,
+            stderr,
+            connected,
+        );
         if (std.Io.Dir.cwd().access(io, marker, .{})) |_| {
             connected = true;
             dropped_at = std.Io.Timestamp.now(io, .real).toSeconds();
         } else |_| {}
 
         // ssh exits with 255 when the connection fails or drops. Anything
-        // else means tmux exited or was detached, so we're done.
+        // else means the session ended, so we're done.
         if (exit_code != 255 or !connected) return exit_code;
 
         const elapsed = std.Io.Timestamp.now(io, .real).toSeconds() - dropped_at;
         verbosePrint(opts, stderr, "persist: connection lost, reconnecting ({d}s)", .{elapsed});
 
-        // Keep the screen untouched; tmux redraws it once we're back.
+        // Keep the screen untouched; it's redrawn once we're back.
         stdout.print("\x1b]2;{s} (reconnecting, {d}s)\x07", .{ dest, elapsed }) catch {};
         stdout.flush() catch {};
         try std.Io.sleep(io, .fromSeconds(1), .awake);
@@ -907,8 +976,8 @@ fn childExecFiltered(
 }
 
 /// Whether a line ssh printed to stderr is noise in a persistent session.
-/// Messages about the connection dropping always are: tmux redraws the
-/// screen once we reconnect, so they'd only flash over it. While
+/// Messages about the connection dropping always are: the screen is
+/// redrawn once we reconnect, so they'd only flash over it. While
 /// `reconnecting`, so are the errors from attempts that fail while the
 /// network comes back. Anything else (banners, auth errors, ...) is shown.
 fn isSshNoise(line: []const u8, reconnecting: bool) bool {
@@ -1233,11 +1302,4 @@ test "isSshNoise" {
     // Banners and auth failures always show.
     try testing.expect(!isSshNoise("To authenticate, visit: https://example.com/a/1", true));
     try testing.expect(!isSshNoise("alice@example.com: Permission denied (publickey).", true));
-}
-
-test "persist_install_script embeds the helper" {
-    const testing = std.testing;
-    try testing.expect(std.mem.indexOf(u8, persist_install_script, persist_script) != null);
-    try testing.expect(std.mem.indexOf(u8, persist_script, "__GHOSTTY_SSH_PERSIST__") == null);
-    try testing.expect(std.mem.endsWith(u8, persist_script, "\n"));
 }

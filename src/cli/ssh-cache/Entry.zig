@@ -17,7 +17,7 @@ pub fn parse(line: []const u8) ?Entry {
     var iter = std.mem.tokenizeScalar(u8, trimmed, '|');
     const hostname = iter.next() orelse return null;
     const timestamp_str = iter.next() orelse return null;
-    const terminfo_version = iter.next() orelse "xterm-ghostty";
+    const terminfo_version = iter.next() orelse "xterm-hallows";
     const timestamp = std.fmt.parseInt(i64, timestamp_str, 10) catch |err| {
         std.log.warn(
             "Invalid timestamp in cache entry: {s} err={}",
@@ -45,20 +45,20 @@ pub fn format(self: Entry, writer: *std.Io.Writer) FormatError!void {
 test "cache entry parsing valid formats" {
     const testing = std.testing;
 
-    const entry = Entry.parse("example.com|1640995200|xterm-ghostty").?;
+    const entry = Entry.parse("example.com|1640995200|xterm-hallows").?;
     try testing.expectEqualStrings("example.com", entry.hostname);
     try testing.expectEqual(@as(i64, 1640995200), entry.timestamp);
-    try testing.expectEqualStrings("xterm-ghostty", entry.terminfo_version);
+    try testing.expectEqualStrings("xterm-hallows", entry.terminfo_version);
 
     // Test default terminfo version
     const entry_no_version = Entry.parse("test.com|1640995200").?;
     try testing.expectEqualStrings(
-        "xterm-ghostty",
+        "xterm-hallows",
         entry_no_version.terminfo_version,
     );
 
     // Test complex hostnames
-    const complex_entry = Entry.parse("user@server.example.com|1640995200|xterm-ghostty").?;
+    const complex_entry = Entry.parse("user@server.example.com|1640995200|xterm-hallows").?;
     try testing.expectEqualStrings(
         "user@server.example.com",
         complex_entry.hostname,
@@ -96,6 +96,6 @@ test "cache entry parsing malformed data resilience" {
 
     // Extremely large timestamp
     try testing.expect(
-        Entry.parse("host|999999999999999999999999999999999999999999999999|xterm-ghostty") == null,
+        Entry.parse("host|999999999999999999999999999999999999999999999999|xterm-hallows") == null,
     );
 }

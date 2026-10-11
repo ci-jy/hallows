@@ -27,7 +27,7 @@ pub const Options = struct {
 
 /// Manage the SSH terminfo cache for automatic remote host setup.
 ///
-/// The `+ssh` action installs Ghostty's terminfo on remote hosts and records
+/// The `+ssh` action installs Hallows' terminfo on remote hosts and records
 /// each success in this cache so it doesn't re-upload on later connections.
 /// (`+ssh` runs automatically from the shell integration when
 /// `shell-integration-features` includes `ssh-terminfo`.) This command
@@ -54,14 +54,14 @@ pub const Options = struct {
 ///
 /// Examples:
 ///
-///     ghostty +ssh-cache                           # List all cached destinations
-///     ghostty +ssh-cache user@example.com          # Show that destination
-///     ghostty +ssh-cache example.com               # Show all users on that host
-///     ghostty +ssh-cache user@example.com:2222     # Show that destination on port 2222
-///     ghostty +ssh-cache --add=user@example.com    # Manually add a destination
-///     ghostty +ssh-cache --remove=user@example.com # Remove a destination
-///     ghostty +ssh-cache --prune=30d               # Remove entries older than 30 days
-///     ghostty +ssh-cache --clear                   # Clear entire cache
+///     hallows +ssh-cache                           # List all cached destinations
+///     hallows +ssh-cache user@example.com          # Show that destination
+///     hallows +ssh-cache example.com               # Show all users on that host
+///     hallows +ssh-cache user@example.com:2222     # Show that destination on port 2222
+///     hallows +ssh-cache --add=user@example.com    # Manually add a destination
+///     hallows +ssh-cache --remove=user@example.com # Remove a destination
+///     hallows +ssh-cache --prune=30d               # Remove entries older than 30 days
+///     hallows +ssh-cache --clear                   # Clear entire cache
 pub fn run(alloc_gpa: Allocator) !u8 {
     var arena = std.heap.ArenaAllocator.init(alloc_gpa);
     defer arena.deinit();
@@ -95,7 +95,7 @@ pub fn run(alloc_gpa: Allocator) !u8 {
             if (is_host_flag) {
                 try stderr.print(
                     "Warning: --host is deprecated; pass the destination " ++
-                        "directly, e.g. `ghostty +ssh-cache {s}`.\n",
+                        "directly, e.g. `hallows +ssh-cache {s}`.\n",
                     .{arg["--host=".len..]},
                 );
             }
@@ -140,7 +140,7 @@ pub fn run(alloc_gpa: Allocator) !u8 {
     }
 
     // Setup our disk cache to the standard location
-    const cache_path = DiskCache.defaultPath(alloc, "ghostty") catch |err| {
+    const cache_path = DiskCache.defaultPath(alloc, "hallows") catch |err| {
         try stderr.print(
             "Error: unable to determine the cache path: {t}\n",
             .{err},

@@ -25,16 +25,16 @@ fn comptimeGenerateZshCompletions() []const u8 {
 
 fn writeZshCompletions(writer: *std.Io.Writer) !void {
     try writer.writeAll(
-        \\#compdef ghostty
+        \\#compdef hallows
         \\
         \\_fonts () {
-        \\  local font_list=$(ghostty +list-fonts | grep -Z '^[A-Z]')
+        \\  local font_list=$(hallows +list-fonts | grep -Z '^[A-Z]')
         \\  local fonts=(${(f)font_list})
         \\  _describe -t fonts 'fonts' fonts
         \\}
         \\
         \\_themes() {
-        \\  local theme_list=$(ghostty +list-themes | sed -E 's/^(.*) \(.*$/\1/')
+        \\  local theme_list=$(hallows +list-themes | sed -E 's/^(.*) \(.*$/\1/')
         \\  local themes=(${(f)theme_list})
         \\  _describe -t themes 'themes' themes
         \\}

@@ -5,9 +5,9 @@ const Template = struct {
         \\%YAML 1.2
         \\---
         \\# See http://www.sublimetext.com/docs/syntax.html
-        \\name: Ghostty Config
+        \\name: Hallows Config
         \\file_extensions:
-        \\  - ghostty
+        \\  - hallows
         \\scope: source.ghostty
         \\
         \\contexts:

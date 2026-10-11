@@ -507,7 +507,7 @@ test "disk cache default path" {
     const testing = std.testing;
     const alloc = std.testing.allocator;
 
-    const path = try DiskCache.defaultPath(alloc, "ghostty");
+    const path = try DiskCache.defaultPath(alloc, "hallows");
     defer alloc.free(path);
     try testing.expect(path.len > 0);
 }
@@ -677,7 +677,7 @@ test "disk cache reads duplicate keys" {
         var buf: [256]u8 = undefined;
         var file_writer = file.writer(io, &buf);
         try file_writer.interface.writeAll(
-            "example.com|100|xterm-ghostty\nexample.com|200|xterm-newer\n",
+            "example.com|100|xterm-hallows\nexample.com|200|xterm-newer\n",
         );
         try file_writer.interface.flush();
     }
@@ -708,9 +708,9 @@ test "disk cache reads survive allocation failure" {
         var buf: [256]u8 = undefined;
         var file_writer = file.writer(testing.io, &buf);
         try file_writer.interface.writeAll(
-            "a.com|100|xterm-ghostty\n" ++
-                "b.com|100|xterm-ghostty\n" ++
-                "c.com|100|xterm-ghostty\n" ++
+            "a.com|100|xterm-hallows\n" ++
+                "b.com|100|xterm-hallows\n" ++
+                "c.com|100|xterm-hallows\n" ++
                 "a.com|200|xterm-newer\n",
         );
         try file_writer.interface.flush();

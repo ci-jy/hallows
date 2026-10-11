@@ -5,6 +5,7 @@ const assert = std.debug.assert;
 const Config = @import("Config.zig");
 const RunStep = std.Build.Step.Run;
 const SharedDeps = @import("SharedDeps.zig");
+const HallowsPersist = @import("HallowsPersist.zig");
 
 steps: []*std.Build.Step,
 
@@ -39,15 +40,15 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
         const run = b.addRunArtifact(build_data_exe);
         run.addArg("+terminfo");
         const wf = b.addWriteFiles();
-        const source = wf.addCopyFile(run.captureStdOut(.{}), "ghostty.terminfo");
+        const source = wf.addCopyFile(run.captureStdOut(.{}), "hallows.terminfo");
 
         if (cfg.emit_terminfo) {
             const source_install = b.addInstallFile(
                 source,
                 if (os_tag == .freebsd)
-                    "share/site-terminfo/ghostty.terminfo"
+                    "share/site-terminfo/hallows.terminfo"
                 else
-                    "share/terminfo/ghostty.terminfo",
+                    "share/terminfo/hallows.terminfo",
             );
 
             try steps.append(b.allocator, &source_install.step);
@@ -69,9 +70,9 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
             const cap_install = b.addInstallFile(
                 out_source,
                 if (os_tag == .freebsd)
-                    "share/site-terminfo/ghostty.termcap"
+                    "share/site-terminfo/hallows.termcap"
                 else
-                    "share/terminfo/ghostty.termcap",
+                    "share/terminfo/hallows.termcap",
             );
 
             try steps.append(b.allocator, &cap_install.step);
@@ -114,12 +115,18 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
         }
     }
 
+    // hallows-persist, the remote half of the ssh-persist shell integration feature
+    if (cfg.emit_hallows_persist) {
+        const hallows = try HallowsPersist.init(b, cfg, deps);
+        try steps.appendSlice(b.allocator, hallows.steps);
+    }
+
     // Shell-integration
     {
         const install_step = b.addInstallDirectory(.{
             .source_dir = b.path("src/shell-integration"),
             .install_dir = .{ .custom = "share" },
-            .install_subdir = b.pathJoin(&.{ "ghostty", "shell-integration" }),
+            .install_subdir = b.pathJoin(&.{ "hallows", "shell-integration" }),
             .exclude_extensions = &.{".md"},
         });
         try steps.append(b.allocator, &install_step.step);
@@ -131,7 +138,7 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
             const install_step = b.addInstallDirectory(.{
                 .source_dir = upstream.path(""),
                 .install_dir = .{ .custom = "share" },
-                .install_subdir = b.pathJoin(&.{ "ghostty", "themes" }),
+                .install_subdir = b.pathJoin(&.{ "hallows", "themes" }),
                 .exclude_extensions = &.{".md"},
             });
             try steps.append(b.allocator, &install_step.step);
@@ -143,7 +150,7 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
         const run = b.addRunArtifact(build_data_exe);
         run.addArg("+fish");
         const wf = b.addWriteFiles();
-        _ = wf.addCopyFile(run.captureStdOut(.{}), "ghostty.fish");
+        _ = wf.addCopyFile(run.captureStdOut(.{}), "hallows.fish");
 
         const install_step = b.addInstallDirectory(.{
             .source_dir = wf.getDirectory(),
@@ -158,7 +165,7 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
         const run = b.addRunArtifact(build_data_exe);
         run.addArg("+zsh");
         const wf = b.addWriteFiles();
-        _ = wf.addCopyFile(run.captureStdOut(.{}), "_ghostty");
+        _ = wf.addCopyFile(run.captureStdOut(.{}), "_hallows");
 
         const install_step = b.addInstallDirectory(.{
             .source_dir = wf.getDirectory(),
@@ -173,7 +180,7 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
         const run = b.addRunArtifact(build_data_exe);
         run.addArg("+bash");
         const wf = b.addWriteFiles();
-        _ = wf.addCopyFile(run.captureStdOut(.{}), "ghostty.bash");
+        _ = wf.addCopyFile(run.captureStdOut(.{}), "hallows.bash");
 
         const install_step = b.addInstallDirectory(.{
             .source_dir = wf.getDirectory(),
@@ -190,22 +197,22 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
         {
             const run = b.addRunArtifact(build_data_exe);
             run.addArg("+vim-syntax");
-            _ = wf.addCopyFile(run.captureStdOut(.{}), "syntax/ghostty.vim");
+            _ = wf.addCopyFile(run.captureStdOut(.{}), "syntax/hallows.vim");
         }
         {
             const run = b.addRunArtifact(build_data_exe);
             run.addArg("+vim-ftdetect");
-            _ = wf.addCopyFile(run.captureStdOut(.{}), "ftdetect/ghostty.vim");
+            _ = wf.addCopyFile(run.captureStdOut(.{}), "ftdetect/hallows.vim");
         }
         {
             const run = b.addRunArtifact(build_data_exe);
             run.addArg("+vim-ftplugin");
-            _ = wf.addCopyFile(run.captureStdOut(.{}), "ftplugin/ghostty.vim");
+            _ = wf.addCopyFile(run.captureStdOut(.{}), "ftplugin/hallows.vim");
         }
         {
             const run = b.addRunArtifact(build_data_exe);
             run.addArg("+vim-compiler");
-            _ = wf.addCopyFile(run.captureStdOut(.{}), "compiler/ghostty.vim");
+            _ = wf.addCopyFile(run.captureStdOut(.{}), "compiler/hallows.vim");
         }
 
         const vim_step = b.addInstallDirectory(.{
@@ -233,7 +240,7 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
         const run = b.addRunArtifact(build_data_exe);
         run.addArg("+sublime");
         const wf = b.addWriteFiles();
-        _ = wf.addCopyFile(run.captureStdOut(.{}), "ghostty.sublime-syntax");
+        _ = wf.addCopyFile(run.captureStdOut(.{}), "hallows.sublime-syntax");
 
         const install_step = b.addInstallDirectory(.{
             .source_dir = wf.getDirectory(),
@@ -280,7 +287,7 @@ fn addLinuxAppResources(
     });
 
     const exe_abs_path = b.fmt(
-        "{s}/bin/ghostty",
+        "{s}/bin/hallows",
         .{b.install_prefix},
     );
 

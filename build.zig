@@ -288,7 +288,7 @@ pub fn build(b: *std.Build) !void {
             // this also ensures it overwrites the release one with our debug
             // build.
             run_cmd.setEnvironmentVariable(
-                "GHOSTTY_RESOURCES_DIR",
+                "HALLOWS_RESOURCES_DIR",
                 b.getInstallPath(.prefix, "share/ghostty"),
             );
 
@@ -374,6 +374,14 @@ pub fn build(b: *std.Build) !void {
         test_lib_vt_step.dependOn(&mod_vt_c_test_run.step);
         test_lib_vt_build_step.dependOn(&mod_vt_c_test.step);
     }
+
+    // hallows-persist (ssh-persist) tests
+    if (!config.emit_lib_vt) buildpkg.HallowsPersist.addTests(
+        b,
+        mod.vt,
+        test_step,
+        test_filters,
+    );
 
     // Tests (skip when building libghostty-vt)
     if (!config.emit_lib_vt) {

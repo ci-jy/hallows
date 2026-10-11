@@ -2,21 +2,21 @@
   use platform
   use str
 
-  # Clean up XDG_DATA_DIRS by removing GHOSTTY_SHELL_INTEGRATION_XDG_DIR
-  if (and (has-env GHOSTTY_SHELL_INTEGRATION_XDG_DIR) (has-env XDG_DATA_DIRS)) {
-    set-env XDG_DATA_DIRS (str:replace $E:GHOSTTY_SHELL_INTEGRATION_XDG_DIR":" "" $E:XDG_DATA_DIRS)
-    unset-env GHOSTTY_SHELL_INTEGRATION_XDG_DIR
+  # Clean up XDG_DATA_DIRS by removing HALLOWS_SHELL_INTEGRATION_XDG_DIR
+  if (and (has-env HALLOWS_SHELL_INTEGRATION_XDG_DIR) (has-env XDG_DATA_DIRS)) {
+    set-env XDG_DATA_DIRS (str:replace $E:HALLOWS_SHELL_INTEGRATION_XDG_DIR":" "" $E:XDG_DATA_DIRS)
+    unset-env HALLOWS_SHELL_INTEGRATION_XDG_DIR
   }
 
   # List of enabled shell integration features
-  var features = [(str:split ',' $E:GHOSTTY_SHELL_FEATURES)]
+  var features = [(str:split ',' $E:HALLOWS_SHELL_FEATURES)]
 
   # State tracking for semantic prompt sequences
   # Values: 'prompt-start', 'pre-exec', 'post-exec'
-  fn set-prompt-state {|new| set-env __ghostty_prompt_state $new }
+  fn set-prompt-state {|new| set-env __hallows_prompt_state $new }
 
   fn mark-prompt-start {
-    if (not-eq $E:__ghostty_prompt_state 'prompt-start') {
+    if (not-eq $E:__hallows_prompt_state 'prompt-start') {
       printf "\e]133;D;aid="$pid"\a"
     }
     set-prompt-state 'prompt-start'
@@ -78,10 +78,10 @@
 
   # SSH Integration
   #
-  # Wrap `ssh` with `ghostty +ssh` and translate the shell-integration
+  # Wrap `ssh` with `hallows +ssh` and translate the shell-integration
   # feature flags into command options.
   fn ssh-integration {|@args|
-    var ghostty = $E:GHOSTTY_BIN_DIR/"ghostty"
+    var hallows = $E:HALLOWS_BIN_DIR/"hallows"
     var flags = []
     if (not (has-value $features ssh-env)) {
       set flags = (conj $flags --forward-env=false)
@@ -92,7 +92,7 @@
     if (has-value $features ssh-persist) {
       set flags = (conj $flags --persist)
     }
-    $ghostty +ssh $@flags -- $@args
+    $hallows +ssh $@flags -- $@args
   }
 
   defer {
@@ -103,7 +103,7 @@
   set edit:after-readline  = (conj $edit:after-readline $mark-output-start~)
   set edit:after-command   = (conj $edit:after-command $mark-output-end~)
 
-  if (str:contains $E:GHOSTTY_SHELL_FEATURES "cursor") {
+  if (str:contains $E:HALLOWS_SHELL_FEATURES "cursor") {
     var cursor = "5"    # blinking bar
     if (has-value $features cursor:steady) {
       set cursor = "6"  # steady bar
@@ -114,15 +114,15 @@
     set edit:before-readline = (conj $edit:before-readline $beam~)
     set edit:after-readline  = (conj $edit:after-readline {|_| reset })
   }
-  if (and (has-value $features path) (has-env GHOSTTY_BIN_DIR)) {
-    if (not (has-value $paths $E:GHOSTTY_BIN_DIR)) {
-        set paths = [$@paths $E:GHOSTTY_BIN_DIR]
+  if (and (has-value $features path) (has-env HALLOWS_BIN_DIR)) {
+    if (not (has-value $paths $E:HALLOWS_BIN_DIR)) {
+        set paths = [$@paths $E:HALLOWS_BIN_DIR]
     }
   }
   if (and (has-value $features sudo) (not-eq "" $E:TERMINFO) (has-external sudo)) {
     edit:add-var sudo~ $sudo-with-terminfo~
   }
-  if (and (str:contains $E:GHOSTTY_SHELL_FEATURES ssh-) (has-external ssh)) {
+  if (and (str:contains $E:HALLOWS_SHELL_FEATURES ssh-) (has-external ssh)) {
     edit:add-var ssh~ $ssh-integration~
   }
 

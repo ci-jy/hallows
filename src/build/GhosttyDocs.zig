@@ -16,16 +16,18 @@ pub fn init(
     errdefer steps.deinit(b.allocator);
 
     const manpages = [_]struct {
+        /// The generator, as `mdgen_<gen>_<section>` in `Config.ExeEntrypoint`.
+        gen: []const u8,
         name: []const u8,
         section: []const u8,
     }{
-        .{ .name = "ghostty", .section = "1" },
-        .{ .name = "ghostty", .section = "5" },
+        .{ .gen = "ghostty", .name = "hallows", .section = "1" },
+        .{ .gen = "ghostty", .name = "hallows", .section = "5" },
     };
 
     inline for (manpages) |manpage| {
         const generate_markdown = b.addExecutable(.{
-            .name = "mdgen_" ++ manpage.name ++ "_" ++ manpage.section,
+            .name = "mdgen_" ++ manpage.gen ++ "_" ++ manpage.section,
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/main.zig"),
                 .target = b.graph.host,
@@ -40,7 +42,7 @@ pub fn init(
             var copy = deps.config.*;
             copy.exe_entrypoint = @field(
                 Config.ExeEntrypoint,
-                "mdgen_" ++ manpage.name ++ "_" ++ manpage.section,
+                "mdgen_" ++ manpage.gen ++ "_" ++ manpage.section,
             );
             break :config copy;
         };
@@ -54,7 +56,7 @@ pub fn init(
 
         try steps.append(b.allocator, &b.addInstallFile(
             markdown_output,
-            "share/ghostty/doc/" ++ manpage.name ++ "." ++ manpage.section ++ ".md",
+            "share/hallows/doc/" ++ manpage.name ++ "." ++ manpage.section ++ ".md",
         ).step);
 
         const generate_html = b.addSystemCommand(&.{"pandoc"});
@@ -69,7 +71,7 @@ pub fn init(
 
         try steps.append(b.allocator, &b.addInstallFile(
             generate_html.captureStdOut(.{}),
-            "share/ghostty/doc/" ++ manpage.name ++ "." ++ manpage.section ++ ".html",
+            "share/hallows/doc/" ++ manpage.name ++ "." ++ manpage.section ++ ".html",
         ).step);
 
         const generate_manpage = b.addSystemCommand(&.{"pandoc"});

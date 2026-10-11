@@ -1,15 +1,15 @@
 # FILES
 
-_\$XDG_CONFIG_HOME/ghostty/config.ghostty_
+_\$XDG_CONFIG_HOME/hallows/config.hallows_
 
 : Location of the default configuration file.
 
-_\$HOME/Library/Application Support/com.mitchellh.ghostty/config.ghostty_
+_\$HOME/Library/Application Support/app.hallows/config.hallows_
 
 : **On macOS**, location of the default configuration file. This location takes
 precedence over the XDG environment locations.
 
-_\$LOCALAPPDATA/ghostty/config.ghostty_
+_\$LOCALAPPDATA/hallows/config.hallows_
 
 : **On Windows**, if _\$XDG_CONFIG_HOME_ is not set, _\$LOCALAPPDATA_ will be searched
 for configuration files.
@@ -18,17 +18,17 @@ for configuration files.
 
 **TERM**
 
-: Defaults to `xterm-ghostty`. Can be configured with the `term` configuration option.
+: Defaults to `xterm-hallows`. Can be configured with the `term` configuration option.
 
-**GHOSTTY_RESOURCES_DIR**
+**HALLOWS_RESOURCES_DIR**
 
-: Where the Ghostty resources can be found.
+: Where the Hallows resources can be found.
 
 **XDG_CONFIG_HOME**
 
 : Default location for configuration files.
 
-**$HOME/Library/Application Support/com.mitchellh.ghostty**
+**$HOME/Library/Application Support/app.hallows**
 
 : **MACOS ONLY** default location for configuration files. This location takes
 precedence over the XDG environment locations.
@@ -37,18 +37,18 @@ precedence over the XDG environment locations.
 
 : **WINDOWS ONLY:** alternate location to search for configuration files.
 
-**GHOSTTY_LOG**
+**HALLOWS_LOG**
 
-: The `GHOSTTY_LOG` environment variable can be used to control which
-destinations receive logs. Ghostty currently defines two destinations:
+: The `HALLOWS_LOG` environment variable can be used to control which
+destinations receive logs. Hallows currently defines two destinations:
 
 : - `stderr` - logging to `stderr`.
 : - `macos` - logging to macOS's unified log (has no effect on non-macOS platforms).
 
 : Combine values with a comma to enable multiple destinations. Prefix a
 destination with `no-` to disable it. Enabling and disabling destinations
-can be done at the same time. Setting `GHOSTTY_LOG` to `true` will enable all
-destinations. Setting `GHOSTTY_LOG` to `false` will disable all destinations.
+can be done at the same time. Setting `HALLOWS_LOG` to `true` will enable all
+destinations. Setting `HALLOWS_LOG` to `false` will disable all destinations.
 
 # BUGS
 
@@ -61,4 +61,4 @@ Ghostty contributors <https://github.com/ghostty-org/ghostty/graphs/contributors
 
 # SEE ALSO
 
-**ghostty(5)**
+**hallows(5)**

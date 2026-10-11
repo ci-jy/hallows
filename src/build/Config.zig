@@ -56,6 +56,7 @@ emit_lib_vt: bool = false,
 emit_macos_app: bool = false,
 emit_terminfo: bool = false,
 emit_termcap: bool = false,
+emit_hallows_persist: bool = false,
 emit_test_exe: bool = false,
 emit_themes: bool = false,
 emit_xcframework: bool = false,
@@ -521,6 +522,12 @@ pub fn init(b: *std.Build, appVersion: []const u8, libVersion: []const u8) !Conf
         .Debug => true,
         .ReleaseSafe, .ReleaseFast, .ReleaseSmall => false,
     };
+
+    config.emit_hallows_persist = b.option(
+        bool,
+        "emit-hallows-persist",
+        "Build and install hallows-persist, the remote half of the ssh-persist shell integration feature, for the remote platforms it supports",
+    ) orelse true;
 
     config.emit_themes = b.option(
         bool,

@@ -172,7 +172,7 @@ const Boo = struct {
     }
 };
 
-/// The `boo` command is used to display the animation from the Ghostty website in the terminal
+/// The `boo` command is used to display the animation from the Hallows website in the terminal
 pub fn run(gpa: Allocator) !u8 {
     var env_map = try global.environMap();
     defer env_map.deinit();

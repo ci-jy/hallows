@@ -44,7 +44,7 @@ pub fn init(
 
         try steps.append(b.allocator, &b.addInstallFile(
             webgen_config_out,
-            "share/ghostty/webdata/config.mdx",
+            "share/hallows/webdata/config.mdx",
         ).step);
     }
 
@@ -75,7 +75,7 @@ pub fn init(
 
         try steps.append(b.allocator, &b.addInstallFile(
             webgen_actions_out,
-            "share/ghostty/webdata/actions.mdx",
+            "share/hallows/webdata/actions.mdx",
         ).step);
     }
 
@@ -106,7 +106,7 @@ pub fn init(
 
         try steps.append(b.allocator, &b.addInstallFile(
             webgen_commands_out,
-            "share/ghostty/webdata/commands.mdx",
+            "share/hallows/webdata/commands.mdx",
         ).step);
     }
 

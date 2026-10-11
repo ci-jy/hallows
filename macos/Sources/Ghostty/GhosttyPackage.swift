@@ -44,7 +44,7 @@ extension Ghostty {
     /// Returns the mechanism that launched the app. This is based on an env var so
     /// its up to the env var being set in the correct circumstance.
     static var launchSource: LaunchSource {
-        guard let envValue = ProcessInfo.processInfo.environment["GHOSTTY_MAC_LAUNCH_SOURCE"] else {
+        guard let envValue = ProcessInfo.processInfo.environment["HALLOWS_MAC_LAUNCH_SOURCE"] else {
             // We default to the CLI because the app bundle always sets the
             // source. If its unset we assume we're in a CLI environment.
             return .cli

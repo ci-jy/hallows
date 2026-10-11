@@ -1,25 +1,25 @@
 const std = @import("std");
 const Source = @import("Source.zig");
 
-/// Ghostty's terminfo entry.
+/// Hallows' terminfo entry.
 pub const ghostty: Source = .{
     .names = &.{
         // We support the "xterm-" prefix because some poorly behaved programs
         // use this to detect if the terminal supports 256 colors and other
         // features.
-        // HACK: This is a hack on a hack...we use "xterm-ghostty" to prevent
+        // HACK: This is a hack on a hack...we use "xterm-hallows" to prevent
         // vim from breaking, and when we do this as the default we break
         // tcell-based applications (lazygit, aerc, etc). tcell has a bug where
         // the primary terminfo name must be the value of TERM.
         // https://github.com/gdamore/tcell/pull/639 fixes the issue but is not
         // merged yet. Consider switching these in the future.
-        "xterm-ghostty",
+        "xterm-hallows",
 
         // The preferred name
-        "ghostty",
+        "hallows",
 
         // Our "formal" name
-        "Ghostty",
+        "Hallows",
     },
 
     // NOTE: These capabilities are super underdocumented and I'm not 100%

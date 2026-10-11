@@ -67,7 +67,7 @@ const ThemeListElement = struct {
 };
 
 /// The `list-themes` command is used to preview or list all the available
-/// themes for Ghostty.
+/// themes for Hallows.
 ///
 /// If this command is run from a TTY, a TUI preview of the themes will be
 /// shown. While in the preview, `F1` will bring up a help screen and `ESC` will
@@ -80,19 +80,19 @@ const ThemeListElement = struct {
 ///
 /// Two different directories will be searched for themes.
 ///
-/// The first directory is the `themes` subdirectory of your Ghostty
+/// The first directory is the `themes` subdirectory of your Hallows
 /// configuration directory. This is `$XDG_CONFIG_HOME/ghostty/themes` or
 /// `~/.config/ghostty/themes`.
 ///
-/// The second directory is the `themes` subdirectory of the Ghostty resources
-/// directory. Ghostty ships with a multitude of themes that will be installed
+/// The second directory is the `themes` subdirectory of the Hallows resources
+/// directory. Hallows ships with a multitude of themes that will be installed
 /// into this directory. On macOS, this directory is the
-/// `Ghostty.app/Contents/Resources/ghostty/themes`. On Linux, this directory
-/// is the `share/ghostty/themes` (wherever you installed the Ghostty "share"
-/// directory). If you're running Ghostty from the source, this is the
+/// `Hallows.app/Contents/Resources/ghostty/themes`. On Linux, this directory
+/// is the `share/ghostty/themes` (wherever you installed the Hallows "share"
+/// directory). If you're running Hallows from the source, this is the
 /// `zig-out/share/ghostty/themes` directory.
 ///
-/// You can also set the `GHOSTTY_RESOURCES_DIR` environment variable to point
+/// You can also set the `HALLOWS_RESOURCES_DIR` environment variable to point
 /// to the resources directory.
 ///
 /// Flags:
@@ -127,8 +127,8 @@ pub fn run(gpa_alloc: std.mem.Allocator) !u8 {
 
     const resources_dir = global.resourcesDir().app();
     if (resources_dir == null)
-        try stderr.print("Could not find the Ghostty resources directory. Please ensure " ++
-            "that Ghostty is installed correctly.\n", .{});
+        try stderr.print("Could not find the Hallows resources directory. Please ensure " ++
+            "that Hallows is installed correctly.\n", .{});
 
     var count: usize = 0;
 
@@ -206,7 +206,7 @@ fn resolveAutoThemePath(alloc: std.mem.Allocator) ![]u8 {
     defer alloc.free(main_cfg_path);
 
     const base_dir = std.fs.path.dirname(main_cfg_path) orelse return error.BadPathName;
-    return try std.fs.path.join(alloc, &.{ base_dir, "auto", "theme.ghostty" });
+    return try std.fs.path.join(alloc, &.{ base_dir, "auto", "theme.hallows" });
 }
 
 fn writeAutoThemeFile(alloc: std.mem.Allocator, theme_name: []const u8) !void {
@@ -309,7 +309,7 @@ const Preview = struct {
 
         const writer = self.tty.writer();
         try self.vx.enterAltScreen(writer);
-        try self.vx.setTitle(writer, "👻 Ghostty Theme Preview 👻");
+        try self.vx.setTitle(writer, "👻 Hallows Theme Preview 👻");
         try self.vx.queryTerminal(writer, .fromSeconds(1));
         try self.vx.setMouseMode(writer, true);
         if (self.vx.caps.color_scheme_updates)
@@ -865,18 +865,18 @@ const Preview = struct {
                 child.fill(.{ .style = self.ui_standard() });
 
                 const save_instructions = [_][]const u8{
-                    "To apply this theme, add the following line to your Ghostty configuration:",
+                    "To apply this theme, add the following line to your Hallows configuration:",
                     "",
                     try std.fmt.allocPrint(alloc, "theme = {s}", .{theme.theme}),
                     "",
                     "Save the configuration file and then reload it to apply the new theme.",
                     "",
                     "Or press 'w' to write an auto theme file to your system's preferred default config path.",
-                    "Then add the following line to your Ghostty configuration and reload:",
+                    "Then add the following line to your Hallows configuration and reload:",
                     "",
-                    "config-file = ?auto/theme.ghostty",
+                    "config-file = ?auto/theme.hallows",
                     "",
-                    "For more details on configuration and themes, visit the Ghostty documentation:",
+                    "For more details on configuration and themes, visit the Hallows documentation:",
                     "",
                     "https://ghostty.org/docs/config/reference",
                 };
