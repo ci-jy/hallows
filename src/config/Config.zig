@@ -2972,6 +2972,16 @@ keybind: Keybinds = .{},
 ///     cache manually using various arguments.
 ///     (Available since: 1.2.0)
 ///
+///   * `ssh-persist` - Make interactive SSH sessions survive dropped
+///     connections, such as when your computer sleeps, the network changes,
+///     or the remote `sshd`/`tailscaled` restarts. `ssh host` (with no remote
+///     command) runs inside tmux on the remote host and reconnects on its
+///     own to the tmux session you were last on. Requires `tmux` on the
+///     remote host; without it, `ssh` connects normally. A small helper is
+///     installed as `~/.local/share/ghostty/ssh-persist` on first connect.
+///     See `ghostty +ssh --help` for details.
+///     (Available since: 1.4.0)
+///
 ///   * `path` - Add Ghostty's binary directory to PATH. This ensures the `ghostty`
 ///     command is available in the shell even if shell init scripts reset PATH.
 ///     This is particularly useful on macOS where PATH is often overridden by
@@ -8924,6 +8934,7 @@ pub const ShellIntegrationFeatures = packed struct {
     title: bool = true,
     @"ssh-env": bool = false,
     @"ssh-terminfo": bool = false,
+    @"ssh-persist": bool = false,
     path: bool = true,
 };
 

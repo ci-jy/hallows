@@ -79,7 +79,7 @@ the module using the `-e "use ghostty *"` flag when starting Nushell.
 
 Nushell provides many shell features itself, such as `title` and `cursor`,
 so our integration focuses on Ghostty-specific features like `sudo`,
-`ssh-env`, and `ssh-terminfo`.
+`ssh-env`, `ssh-terminfo`, and `ssh-persist`.
 
 The shell integration is automatically enabled when running Nushell in Ghostty,
 but you can also load it manually is shell integration is disabled:

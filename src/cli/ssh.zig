@@ -19,6 +19,8 @@ const usage =
     \\  --forward-env[=bool]  Enable TERM / SendEnv forwarding. Default: true.
     \\  --terminfo[=bool]     Install Ghostty terminfo on first connect. Default: true.
     \\  --cache[=bool]        Use the terminfo install cache. Default: true.
+    \\  --persist[=bool]      Run interactive logins in tmux and reconnect
+    \\                        automatically. Default: false.
     \\  --ssh=<path>          Path to the ssh binary. Default: first `ssh` on PATH.
     \\  --verbose             Print +ssh status lines to stderr.
     \\  --help                Show full help.
@@ -39,6 +41,9 @@ pub const Options = struct {
 
     /// When false, both cache read and write are bypassed.
     cache: bool = true,
+
+    /// Maps to the `ssh-persist` shell integration feature.
+    persist: bool = false,
 
     /// The wrapped `ssh` binary.
     /// `/`-containing values are treated as paths; otherwise resolved via PATH.
@@ -139,6 +144,28 @@ pub const Options = struct {
 /// remote, filesystem permissions), a warning is logged and the
 /// connection continues with `TERM=xterm-256color`.
 ///
+/// With `--persist`, an interactive login (a destination with no remote
+/// command, run from a terminal) is made to survive dropped connections,
+/// such as when the computer sleeps, the network changes, or the remote
+/// `sshd`/`tailscaled` restarts:
+///
+///   * On the first connection to a destination, a small helper script is
+///     installed as `~/.local/share/ghostty/ssh-persist` on the remote
+///     host (cached like the terminfo install). The remote host needs
+///     `tmux`; without it, `+ssh` falls back to a normal login.
+///
+///   * The login attaches to tmux. The tmux server is started in a systemd
+///     user scope when available, so it outlives the ssh session's cgroup,
+///     and Ghostty's terminal features are enabled in tmux.
+///
+///   * When the connection drops, `+ssh` reconnects on its own and lands
+///     on the tmux session this terminal was last showing, even after
+///     switching sessions inside tmux. Reconnect progress is shown in the
+///     window title only. Detaching or exiting tmux ends `+ssh` as usual.
+///
+/// Remembering session switches across reconnects needs a Linux remote;
+/// elsewhere, reconnects attach to the most recently used session.
+///
 /// Flags:
 ///
 ///   * `--forward-env=<bool>`: Enable `TERM` / `SendEnv` environment
@@ -146,6 +173,10 @@ pub const Options = struct {
 ///
 ///   * `--terminfo=<bool>`: Enable automatic terminfo install on first
 ///     connection. Default: `true`.
+///
+///   * `--persist=<bool>`: Run interactive logins inside tmux and
+///     reconnect automatically when the connection drops (see above).
+///     Default: `false`.
 ///
 ///   * `--cache=<bool>`: Use the terminfo install cache. Default: `true`.
 ///     When `false`, both the cache read (skip-if-installed) and the
@@ -232,13 +263,19 @@ fn runInner(
         return 2;
     }
 
+    // `ssh -G` output, for resolving the destination and its settings.
+    const ssh_config: ?[]const u8 = if (opts.terminfo or opts.persist)
+        sshConfig(alloc, opts.ssh, opts._ssh_args.items)
+    else
+        null;
+
     const session: struct {
         term: []const u8,
         to_cache: ?struct { cache: DiskCache, dest: []const u8 } = null,
     } = session: {
         if (!opts.terminfo) break :session .{ .term = "xterm-256color" };
 
-        const dest = resolveDestination(alloc, opts.ssh, opts._ssh_args.items) orelse {
+        const dest = (if (ssh_config) |c| parseDestination(alloc, c) else null) orelse {
             warnPrint(stderr, "could not resolve ssh destination; skipping terminfo install", .{});
             break :session .{ .term = "xterm-256color" };
         };
@@ -302,16 +339,29 @@ fn runInner(
             "-o", "SendEnv=TERM_PROGRAM_VERSION",
         };
     } else &.{};
-    const argv = try std.mem.concat(alloc, []const u8, &.{
-        &.{opts.ssh},
-        env_opts,
-        opts._ssh_args.items,
-    });
-    verbosePrint(opts, stderr, "exec: {f}", .{Joined{ .items = argv }});
+    const prefix = try std.mem.concat(alloc, []const u8, &.{ &.{opts.ssh}, env_opts });
 
-    const exit_code = childExec(argv) catch |err| {
-        try stderr.print("Error: failed to run {s}: {t}\n", .{ argv[0], err });
-        return 1;
+    const persist_dest: ?[]const u8 = if (opts.persist)
+        setupPersist(alloc, opts, stderr, ssh_config)
+    else
+        null;
+
+    const exit_code = if (persist_dest) |dest| exit_code: {
+        break :exit_code runPersistent(alloc, opts, stderr, prefix, dest) catch |err| {
+            try stderr.print("Error: failed to run {s}: {t}\n", .{ opts.ssh, err });
+            return 1;
+        };
+    } else exit_code: {
+        const argv = try std.mem.concat(alloc, []const u8, &.{
+            prefix,
+            opts._ssh_args.items,
+        });
+        verbosePrint(opts, stderr, "exec: {f}", .{Joined{ .items = argv }});
+
+        break :exit_code childExec(argv) catch |err| {
+            try stderr.print("Error: failed to run {s}: {t}\n", .{ argv[0], err });
+            return 1;
+        };
     };
     verbosePrint(opts, stderr, "exit: {d}", .{exit_code});
 
@@ -414,10 +464,10 @@ fn checkExit(term: std.process.Child.Term, label: []const u8) error{ChildFailed}
     }
 }
 
-/// Run `ssh -G <args>` and parse the output for `user` and `hostname`.
-/// Returns the resolved `user@hostname`, or null if the destination
-/// could not be resolved.
-fn resolveDestination(
+/// Run `ssh -G <args>` and return its output: the effective ssh
+/// configuration for this invocation, one lowercase `key value` per line.
+/// Returns null if ssh couldn't evaluate it.
+fn sshConfig(
     alloc: Allocator,
     ssh: []const u8,
     args: []const []const u8,
@@ -435,7 +485,7 @@ fn resolveDestination(
         return null;
     };
     checkExit(result.term, "ssh -G") catch return null;
-    return parseDestination(alloc, result.stdout);
+    return result.stdout;
 }
 
 /// Parse `ssh -G` output for `user`, `hostname` and `port` and return the
@@ -555,6 +605,396 @@ fn installRemoteTerminfo(
         return error.InstallFailed;
     };
     checkExit(term, "terminfo install") catch return error.InstallFailed;
+}
+
+/// The remote half of `--persist`, installed on each destination.
+const persist_script = @embedFile("ssh_persist.sh");
+
+/// Identifies `persist_script` in the persist cache, so hosts get the new
+/// script when it changes.
+const persist_version = version: {
+    @setEvalBranchQuota(100_000);
+    break :version std.fmt.comptimePrint(
+        "{x}",
+        .{std.hash.Wyhash.hash(0, persist_script)},
+    );
+};
+
+/// Where `persist_script` lives on the remote, relative to `$HOME`.
+const persist_remote_path = ".local/share/ghostty/ssh-persist";
+
+/// Fed to `sh -s` on the remote to install `persist_script`. Exits with 3
+/// if the remote doesn't have tmux.
+const persist_install_script =
+    \\set -e
+    \\command -v tmux >/dev/null 2>&1 || exit 3
+    \\f="$HOME/
+++ persist_remote_path ++
+    \\"
+    \\mkdir -p "$(dirname "$f")"
+    \\cat >"$f.tmp" <<'__GHOSTTY_SSH_PERSIST__'
+    \\
+++ persist_script ++
+    \\__GHOSTTY_SSH_PERSIST__
+    \\chmod 755 "$f.tmp"
+    \\mv -f "$f.tmp" "$f"
+    \\
+;
+
+/// Decide whether this invocation runs persistently and, if so, make sure
+/// the remote helper is installed. Returns the destination when the
+/// session should run persistently, or null to run plain ssh.
+fn setupPersist(
+    alloc: Allocator,
+    opts: *const Options,
+    stderr: *std.Io.Writer,
+    ssh_config: ?[]const u8,
+) ?[]const u8 {
+    if (!isInteractiveLogin(opts._ssh_args.items)) {
+        verbosePrint(opts, stderr, "persist: not an interactive login", .{});
+        return null;
+    }
+
+    const io = global.io();
+    const stdin_tty = std.Io.File.stdin().isTty(io) catch false;
+    const stdout_tty = std.Io.File.stdout().isTty(io) catch false;
+    if (!stdin_tty or !stdout_tty) {
+        verbosePrint(opts, stderr, "persist: not running in a terminal", .{});
+        return null;
+    }
+
+    const config = ssh_config orelse {
+        warnPrint(stderr, "could not read the ssh configuration; not persisting the session", .{});
+        return null;
+    };
+    if (!configAllowsPersist(config)) {
+        verbosePrint(opts, stderr, "persist: ssh config sets a remote command or disables the tty", .{});
+        return null;
+    }
+    const dest = parseDestination(alloc, config) orelse {
+        warnPrint(stderr, "could not resolve ssh destination; not persisting the session", .{});
+        return null;
+    };
+
+    const cache: ?DiskCache = if (opts.cache) cache: {
+        const path = persistCachePath(alloc) catch |err| {
+            warnPrint(stderr, "ghostty persist cache unavailable: {t}", .{err});
+            break :cache null;
+        };
+        break :cache .{ .path = path };
+    } else null;
+
+    if (cache) |c| {
+        const cached = c.contains(alloc, dest, persist_version) catch |err| cached: {
+            if (DiskCache.isFailure(err)) warnPrint(
+                stderr,
+                "unable to read the cache '{s}': {t}",
+                .{ c.path, err },
+            );
+            break :cached false;
+        };
+        if (cached) {
+            verbosePrint(opts, stderr, "persist: {s} (cached, skipping install)", .{dest});
+            return dest;
+        }
+    }
+
+    stderr.print("Setting up persistent sessions on {s}...\n", .{dest}) catch {};
+    stderr.flush() catch {};
+
+    installPersistScript(alloc, opts, stderr) catch |err| {
+        switch (err) {
+            error.NoTmux => warnPrint(
+                stderr,
+                "tmux is not installed on {s}; connecting without a persistent session",
+                .{dest},
+            ),
+            else => warnPrint(
+                stderr,
+                "failed to set up persistent sessions: {t}",
+                .{err},
+            ),
+        }
+        return null;
+    };
+
+    if (cache) |c| c.add(
+        alloc,
+        dest,
+        persist_version,
+        std.Io.Timestamp.now(io, .real).toSeconds(),
+    ) catch |err| {
+        if (DiskCache.isFailure(err)) warnPrint(
+            stderr,
+            "unable to add '{s}' to the cache '{s}': {t}",
+            .{ dest, c.path, err },
+        );
+    };
+
+    return dest;
+}
+
+/// The persist cache sits next to the terminfo cache. It records which
+/// version of `persist_script` each destination has.
+fn persistCachePath(alloc: Allocator) ![]const u8 {
+    const terminfo_cache = try DiskCache.defaultPath(alloc, "ghostty");
+    const dir = std.fs.path.dirname(terminfo_cache) orelse return error.XdgLookupFailed;
+    return std.fs.path.join(alloc, &.{ dir, "ssh_persist_cache" });
+}
+
+fn installPersistScript(
+    alloc: Allocator,
+    opts: *const Options,
+    stderr: *std.Io.Writer,
+) !void {
+    const argv = try std.mem.concat(alloc, []const u8, &.{
+        &.{opts.ssh},
+        opts._ssh_args.items,
+        &.{"sh -s"},
+    });
+    verbosePrint(opts, stderr, "exec: {f}", .{Joined{ .items = argv }});
+
+    var child = std.process.spawn(global.io(), .{
+        .argv = argv,
+        .stdin = .pipe,
+        .stdout = .ignore,
+        .stderr = if (opts.verbose) .inherit else .ignore,
+    }) catch |err| {
+        log.warn("persist install spawn failed: {}", .{err});
+        return error.InstallFailed;
+    };
+
+    if (child.stdin) |stdin| {
+        stdin.writeStreamingAll(global.io(), persist_install_script) catch {};
+        stdin.close(global.io());
+        child.stdin = null;
+    }
+
+    const term = child.wait(global.io()) catch |err| {
+        log.warn("persist install wait failed: {}", .{err});
+        return error.InstallFailed;
+    };
+    switch (term) {
+        .exited => |rc| if (rc == 3) return error.NoTmux,
+        else => {},
+    }
+    checkExit(term, "persist install") catch return error.InstallFailed;
+}
+
+/// Run the session in tmux on the remote, reconnecting to the same tmux
+/// session whenever the connection drops, until tmux exits or detaches.
+fn runPersistent(
+    alloc: Allocator,
+    opts: *const Options,
+    stderr: *std.Io.Writer,
+    prefix: []const []const u8,
+    dest: []const u8,
+) !u8 {
+    const io = global.io();
+
+    // Identifies this terminal to the remote across reconnects.
+    var tag_bytes: [12]u8 = undefined;
+    io.random(&tag_bytes);
+    const tag = std.fmt.bytesToHex(tag_bytes, .lower);
+
+    // ssh runs LocalCommand only once the connection is up, so this marker
+    // tells a dropped session apart from one that never connected (unknown
+    // host, failed auth, ...), which we must not retry.
+    const marker = try internal_os.randomTmpPath(alloc, "ghostty-ssh-");
+    defer std.Io.Dir.cwd().deleteFile(io, marker) catch {};
+    const local_command = try std.fmt.allocPrint(
+        alloc,
+        "LocalCommand=touch '{s}'",
+        .{marker},
+    );
+
+    // Run via `sh -c` so it works whatever the remote login shell is.
+    const remote_command = try std.fmt.allocPrint(
+        alloc,
+        "sh -c 'exec \"$HOME/{s}\" attach {s}'",
+        .{ persist_remote_path, &tag },
+    );
+
+    // The keepalives notice a dead connection within seconds (e.g. after
+    // waking from sleep) rather than waiting on TCP timeouts.
+    const argv = try std.mem.concat(alloc, []const u8, &.{
+        prefix,
+        &.{"-t"},
+        &.{
+            "-o", "ServerAliveInterval=2",
+            "-o", "ServerAliveCountMax=3",
+            "-o", "ConnectTimeout=5",
+            "-o", "PermitLocalCommand=yes",
+            "-o", local_command,
+        },
+        opts._ssh_args.items,
+        &.{remote_command},
+    });
+    verbosePrint(opts, stderr, "exec: {f}", .{Joined{ .items = argv }});
+
+    var stdout_buffer: [256]u8 = undefined;
+    var stdout_file: std.Io.File = .stdout();
+    var stdout_writer = stdout_file.writer(io, &stdout_buffer);
+    const stdout = &stdout_writer.interface;
+
+    var connected = false;
+    var dropped_at: i64 = 0;
+    while (true) {
+        std.Io.Dir.cwd().deleteFile(io, marker) catch {};
+        const exit_code = try childExecFiltered(argv, stderr, connected);
+        if (std.Io.Dir.cwd().access(io, marker, .{})) |_| {
+            connected = true;
+            dropped_at = std.Io.Timestamp.now(io, .real).toSeconds();
+        } else |_| {}
+
+        // ssh exits with 255 when the connection fails or drops. Anything
+        // else means tmux exited or was detached, so we're done.
+        if (exit_code != 255 or !connected) return exit_code;
+
+        const elapsed = std.Io.Timestamp.now(io, .real).toSeconds() - dropped_at;
+        verbosePrint(opts, stderr, "persist: connection lost, reconnecting ({d}s)", .{elapsed});
+
+        // Keep the screen untouched; tmux redraws it once we're back.
+        stdout.print("\x1b]2;{s} (reconnecting, {d}s)\x07", .{ dest, elapsed }) catch {};
+        stdout.flush() catch {};
+        try std.Io.sleep(io, .fromSeconds(1), .awake);
+    }
+}
+
+/// Like `childExec`, but with ssh's stderr passed through `isSshNoise`.
+fn childExecFiltered(
+    argv: []const []const u8,
+    stderr: *std.Io.Writer,
+    reconnecting: bool,
+) !u8 {
+    const io = global.io();
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .stdin = .inherit,
+        .stdout = .inherit,
+        .stderr = .pipe,
+    });
+
+    if (child.stderr) |pipe| {
+        var buffer: [4096]u8 = undefined;
+        var reader = pipe.reader(io, &buffer);
+        const r = &reader.interface;
+        while (true) {
+            const line = r.takeDelimiter('\n') catch |err| switch (err) {
+                // A line longer than our buffer can't be noise; pass it on.
+                error.StreamTooLong => {
+                    stderr.writeAll(r.buffered()) catch {};
+                    r.toss(r.buffered().len);
+                    continue;
+                },
+                error.ReadFailed => break,
+            } orelse break;
+            if (isSshNoise(line, reconnecting)) continue;
+            stderr.writeAll(line) catch {};
+            stderr.writeByte('\n') catch {};
+            stderr.flush() catch {};
+        }
+        pipe.close(io);
+        child.stderr = null;
+    }
+
+    const term = try child.wait(io);
+    return switch (term) {
+        .exited => |rc| rc,
+        .signal => |sig| @as(u8, 128) + @as(u8, @intCast(@min(@intFromEnum(sig), 127))),
+        .stopped, .unknown => 1,
+    };
+}
+
+/// Whether a line ssh printed to stderr is noise in a persistent session.
+/// Messages about the connection dropping always are: tmux redraws the
+/// screen once we reconnect, so they'd only flash over it. While
+/// `reconnecting`, so are the errors from attempts that fail while the
+/// network comes back. Anything else (banners, auth errors, ...) is shown.
+fn isSshNoise(line: []const u8, reconnecting: bool) bool {
+    const l = std.mem.trimEnd(u8, line, "\r");
+    if (std.mem.startsWith(u8, l, "Connection to ") and
+        std.mem.indexOf(u8, l, " closed") != null) return true;
+
+    const dropped = [_][]const u8{
+        "client_loop: ",
+        "Timeout, server ",
+        "Shared connection to ",
+    };
+    for (dropped) |prefix| {
+        if (std.mem.startsWith(u8, l, prefix)) return true;
+    }
+    if (!reconnecting) return false;
+
+    const failed = [_][]const u8{
+        "ssh: connect to host ",
+        "ssh: Could not resolve hostname ",
+        "kex_exchange_identification: ",
+        "Connection closed by ",
+        "Connection reset by ",
+        "Connection timed out during banner exchange",
+    };
+    for (failed) |prefix| {
+        if (std.mem.startsWith(u8, l, prefix)) return true;
+    }
+    return false;
+}
+
+/// Whether ssh `args` (everything after `ssh`) ask for an interactive login:
+/// a destination and no remote command, without flags that make the session
+/// non-interactive (`-N`, `-T`, `-n`, `-f`, `-s`, `-W`) or that don't
+/// connect at all (`-G`, `-V`, `-O`, `-Q`).
+fn isInteractiveLogin(args: []const []const u8) bool {
+    // ssh flags that take a value, either attached (`-p22`) or as the next
+    // argument (`-p 22`).
+    const with_value = "BbcDEeFIiJLlmOoPpQRSWw";
+    const not_interactive = "fGNnsTVWOQ";
+
+    var dest = false;
+    var i: usize = 0;
+    while (i < args.len) : (i += 1) {
+        const arg = args[i];
+        if (std.mem.eql(u8, arg, "--")) {
+            const rest = args.len - i - 1;
+            return if (dest) rest == 0 else rest == 1;
+        }
+
+        // ssh keeps parsing options after the destination; the first
+        // non-option after it starts the remote command.
+        if (arg.len < 2 or arg[0] != '-') {
+            if (dest) return false;
+            dest = true;
+            continue;
+        }
+
+        for (arg[1..], 1..) |c, j| {
+            if (std.mem.indexOfScalar(u8, not_interactive, c) != null) return false;
+            if (std.mem.indexOfScalar(u8, with_value, c) != null) {
+                if (j == arg.len - 1) i += 1;
+                break;
+            }
+        }
+    }
+    return dest;
+}
+
+/// Whether the effective ssh configuration (`ssh -G` output) leaves us free
+/// to run our own remote command in a tty.
+fn configAllowsPersist(config: []const u8) bool {
+    var it = std.mem.tokenizeScalar(u8, config, '\n');
+    while (it.next()) |line| {
+        const space = std.mem.indexOfScalar(u8, line, ' ') orelse continue;
+        const key = line[0..space];
+        const value = std.mem.trimEnd(u8, line[space + 1 ..], "\r");
+        const conflicts = (std.mem.eql(u8, key, "remotecommand") and
+            !std.mem.eql(u8, value, "none")) or
+            (std.mem.eql(u8, key, "requesttty") and std.mem.eql(u8, value, "no")) or
+            (std.mem.eql(u8, key, "sessiontype") and !std.mem.eql(u8, value, "default")) or
+            (std.mem.eql(u8, key, "stdinnull") and std.mem.eql(u8, value, "yes")) or
+            (std.mem.eql(u8, key, "forkafterauthentication") and std.mem.eql(u8, value, "yes"));
+        if (conflicts) return false;
+    }
+    return true;
 }
 
 /// Returns `128 + signum` for signal-killed children, matching shell convention.
@@ -724,4 +1164,80 @@ test "parseDestination: result is a valid cache key" {
         const result = parseDestination(arena.allocator(), stdout).?;
         try testing.expect(DiskCache.isValidCacheKey(result));
     }
+}
+
+test "isInteractiveLogin" {
+    const testing = std.testing;
+    const yes = [_][]const []const u8{
+        &.{"host"},
+        &.{ "user@host", "-t" },
+        &.{ "-p", "2222", "host" },
+        &.{ "-p2222", "-i", "~/.ssh/id", "host" },
+        &.{ "-v", "-A", "host" },
+        &.{ "host", "-p", "22" },
+        &.{ "-o", "ServerAliveInterval=5", "host" },
+        &.{ "--", "host" },
+        &.{ "-tt", "host" },
+    };
+    for (yes) |args| try testing.expect(isInteractiveLogin(args));
+
+    const no = [_][]const []const u8{
+        &.{},
+        &.{"-v"},
+        &.{ "host", "ls" },
+        &.{ "host", "-p", "22", "ls", "-la" },
+        &.{ "-p", "2222" },
+        &.{ "-N", "-L", "8080:localhost:80", "host" },
+        &.{ "-T", "host" },
+        &.{ "-n", "host" },
+        &.{ "-fN", "host" },
+        &.{ "-G", "host" },
+        &.{ "-W", "localhost:22", "host" },
+        &.{ "-O", "check", "host" },
+        &.{ "-s", "host", "sftp" },
+        &.{ "--", "host", "ls" },
+        &.{ "host", "--", "ls" },
+    };
+    for (no) |args| try testing.expect(!isInteractiveLogin(args));
+}
+
+test "configAllowsPersist" {
+    const testing = std.testing;
+    try testing.expect(configAllowsPersist(
+        "user alice\nhostname example.com\nrequesttty auto\nsessiontype default\n",
+    ));
+    try testing.expect(configAllowsPersist("remotecommand none\n"));
+    try testing.expect(configAllowsPersist("requesttty force\n"));
+    try testing.expect(!configAllowsPersist("remotecommand tmux attach\n"));
+    try testing.expect(!configAllowsPersist("requesttty no\n"));
+    try testing.expect(!configAllowsPersist("sessiontype none\n"));
+    try testing.expect(!configAllowsPersist("stdinnull yes\n"));
+    try testing.expect(!configAllowsPersist("forkafterauthentication yes\n"));
+}
+
+test "isSshNoise" {
+    const testing = std.testing;
+    try testing.expect(isSshNoise("Connection to example.com closed.\r", false));
+    try testing.expect(isSshNoise("Connection to example.com closed by remote host.", false));
+    try testing.expect(isSshNoise("client_loop: send disconnect: Broken pipe", false));
+    try testing.expect(isSshNoise("Timeout, server example.com not responding.", false));
+
+    // Connection errors only count once we're reconnecting.
+    const refused = "ssh: connect to host example.com port 22: Connection refused";
+    try testing.expect(!isSshNoise(refused, false));
+    try testing.expect(isSshNoise(refused, true));
+    const unresolved = "ssh: Could not resolve hostname example.com: Name or service not known";
+    try testing.expect(!isSshNoise(unresolved, false));
+    try testing.expect(isSshNoise(unresolved, true));
+
+    // Banners and auth failures always show.
+    try testing.expect(!isSshNoise("To authenticate, visit: https://example.com/a/1", true));
+    try testing.expect(!isSshNoise("alice@example.com: Permission denied (publickey).", true));
+}
+
+test "persist_install_script embeds the helper" {
+    const testing = std.testing;
+    try testing.expect(std.mem.indexOf(u8, persist_install_script, persist_script) != null);
+    try testing.expect(std.mem.indexOf(u8, persist_script, "__GHOSTTY_SSH_PERSIST__") == null);
+    try testing.expect(std.mem.endsWith(u8, persist_script, "\n"));
 }
