@@ -7184,6 +7184,13 @@ pub const Keybinds = struct {
                 .{ .select_all = {} },
             );
 
+            // File tree, matches Warp
+            try self.set.put(
+                alloc,
+                .{ .key = .{ .unicode = '\\' }, .mods = .{ .super = true } },
+                .toggle_file_tree,
+            );
+
             // Undo/redo
             try self.set.putFlags(
                 alloc,

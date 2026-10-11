@@ -5611,6 +5611,12 @@ pub fn performBindingAction(self: *Surface, action: input.Binding.Action) !bool 
             {},
         ),
 
+        .toggle_file_tree => return try self.rt_app.performAction(
+            .{ .surface = self },
+            .toggle_file_tree,
+            {},
+        ),
+
         .toggle_background_opacity => return try self.rt_app.performAction(
             .{ .surface = self },
             .toggle_background_opacity,

@@ -31,7 +31,8 @@ class BaseTerminalController: NSWindowController,
                               TerminalViewDelegate,
                               TerminalViewModel,
                               ClipboardConfirmationViewDelegate,
-                              FullscreenDelegate {
+                              FullscreenDelegate,
+                              FileTreeDelegate {
     /// Weak surface-to-controller ownership independent of AppKit's transient
     /// view and window attachment state.
     private static let surfaceControllers =
@@ -42,7 +43,10 @@ class BaseTerminalController: NSWindowController,
 
     /// The currently focused surface.
     var focusedSurface: Ghostty.SurfaceView? {
-        didSet { syncFocusToSurfaceTree() }
+        didSet {
+            syncFocusToSurfaceTree()
+            if let focusedSurface { fileTree.follow(focusedSurface) }
+        }
     }
 
     /// The tree of splits within this terminal window.
@@ -55,6 +59,9 @@ class BaseTerminalController: NSWindowController,
 
     /// This can be set to show/hide the command palette.
     @Published var commandPaletteIsShowing: Bool = false
+
+    /// The file tree sidebar.
+    let fileTree = FileTreeModel()
 
     /// Set if the terminal view should show the update overlay.
     @Published var updateOverlayIsVisible: Bool = false
@@ -160,6 +167,8 @@ class BaseTerminalController: NSWindowController,
 
         super.init(window: nil)
 
+        fileTree.delegate = self
+
         // Initialize our initial surface.
         guard let ghostty_app = ghostty.app else { preconditionFailure("app must be loaded") }
         self.surfaceTree = tree ?? .init(view: Ghostty.SurfaceView(ghostty_app, baseConfig: base))
@@ -191,6 +200,11 @@ class BaseTerminalController: NSWindowController,
             self,
             selector: #selector(ghosttyMaximizeDidToggle(_:)),
             name: .ghosttyMaximizeDidToggle,
+            object: nil)
+        center.addObserver(
+            self,
+            selector: #selector(ghosttyFileTreeDidToggle(_:)),
+            name: .ghosttyFileTreeDidToggle,
             object: nil)
 
         // Splits
@@ -659,6 +673,12 @@ class BaseTerminalController: NSWindowController,
         guard let surfaceView = notification.object as? Ghostty.SurfaceView else { return }
         guard surfaceTree.contains(surfaceView) else { return }
         toggleCommandPalette(nil)
+    }
+
+    @objc private func ghosttyFileTreeDidToggle(_ notification: Notification) {
+        guard let surfaceView = notification.object as? Ghostty.SurfaceView else { return }
+        guard surfaceTree.contains(surfaceView) else { return }
+        toggleFileTree(nil)
     }
 
     @objc private func ghosttyMaximizeDidToggle(_ notification: Notification) {
@@ -1451,6 +1471,47 @@ class BaseTerminalController: NSWindowController,
         ghostty.changeFontSize(surface: surface, .reset)
     }
 
+    @IBAction func toggleFileTree(_ sender: Any?) {
+        fileTree.isVisible.toggle()
+
+        // Don't leave the keyboard in a tree that's gone.
+        if !fileTree.isVisible, !(window?.firstResponder is Ghostty.SurfaceView) {
+            fileTreeFocusTerminal()
+        }
+    }
+
+    // MARK: FileTreeDelegate
+
+    func fileTreeOpenTerminal(_ config: Ghostty.SurfaceConfiguration, inNewTab: Bool) {
+        guard let surface = focusedSurface ?? surfaceTree.first(where: { _ in true }) else { return }
+        newSplit(at: surface, direction: .right, baseConfig: fileTreeConfig(config, from: surface, GHOSTTY_SURFACE_CONTEXT_SPLIT))
+    }
+
+    /// Keep the font size of the terminal the file tree opens from.
+    func fileTreeConfig(
+        _ config: Ghostty.SurfaceConfiguration,
+        from surface: Ghostty.SurfaceView,
+        _ context: ghostty_surface_context_e
+    ) -> Ghostty.SurfaceConfiguration {
+        var config = config
+        if let cSurface = surface.surface {
+            config.fontSize = Ghostty.SurfaceConfiguration(
+                from: ghostty_surface_inherited_config(cSurface, context)).fontSize
+        }
+        return config
+    }
+
+    func fileTreeInsert(_ text: String) {
+        guard let surface = focusedSurface else { return }
+        surface.surfaceModel?.sendText(text)
+        fileTreeFocusTerminal()
+    }
+
+    func fileTreeFocusTerminal() {
+        guard let surface = focusedSurface else { return }
+        Ghostty.moveFocus(to: surface)
+    }
+
     @IBAction func toggleCommandPalette(_ sender: Any?) {
         commandPaletteIsShowing.toggle()
         if commandPaletteIsShowing {
@@ -1526,6 +1587,10 @@ extension BaseTerminalController: NSMenuItemValidation {
         switch item.action {
         case #selector(findHide):
             return focusedSurface?.searchState != nil
+
+        case #selector(toggleFileTree):
+            item.state = fileTree.isVisible ? .on : .off
+            return true
 
         default:
             return true

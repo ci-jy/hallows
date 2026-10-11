@@ -18,6 +18,7 @@
 //! Usage:
 //!
 //!   hallows-persist attach TAG [--reconnect]
+//!   hallows-persist cwd TAG
 //!   hallows-persist serve NAME ROWS COLS
 //!
 //! `attach` connects the terminal identified by TAG to a session. TAG is
@@ -30,6 +31,10 @@
 //! power), the user can choose one to take over instead. `--reconnect`
 //! says the terminal still shows the session from before the connection
 //! dropped, so only the screen needs redrawing, not the scrollback.
+//!
+//! `cwd` prints the working directory of the program in the foreground of
+//! the session TAG is attached to (Linux only). Hallows' file tree uses it
+//! to show the files of a remote terminal.
 //!
 //! `serve` runs a session daemon. `attach` starts it; it isn't meant to be
 //! run by hand.
@@ -64,6 +69,7 @@ extern "c" fn forkpty(
 ) c_int;
 extern "c" fn execvp(file: [*:0]const u8, argv: [*:null]const ?[*:0]const u8) c_int;
 extern "c" fn setenv(name: [*:0]const u8, value: [*:0]const u8, overwrite: c_int) c_int;
+extern "c" fn tcgetpgrp(fd: c_int) c.pid_t;
 
 const Winsize = extern struct {
     rows: u16,
@@ -91,6 +97,11 @@ const Tag = enum(u8) {
     info = 6,
     /// Daemon to client: another terminal took the session over.
     detach = 7,
+    /// Client to daemon: where is the session? Payload: the client's tag.
+    cwd = 8,
+    /// Daemon to client: reply to `cwd`. Payload: `Where`, then the
+    /// working directory of the program in the foreground of the session.
+    where = 9,
     _,
 };
 
@@ -115,6 +126,12 @@ const Info = extern struct {
 
     // Followed by a label for the session, to tell sessions apart: its
     // window title, or the shell's working directory.
+};
+
+const Where = extern struct {
+    /// 2 if a client with the tag in the query is attached to this
+    /// session, 1 if it has been attached before, 0 otherwise.
+    tag: u8,
 };
 
 /// A session's `Info` and label, as `querySession` returns them.
@@ -144,6 +161,10 @@ pub fn main(init: std.process.Init) !void {
             reconnect = true;
         }
         std.process.exit(try attach(gpa, init.environ_map, self_path, tag, reconnect));
+    } else if (std.mem.eql(u8, cmd, "cwd")) {
+        const tag = args.next() orelse return usage();
+        if (!validTag(tag)) return usage();
+        std.process.exit(try printCwd(gpa, init.environ_map, tag));
     } else if (std.mem.eql(u8, cmd, "serve")) {
         const name = args.next() orelse return usage();
         const rows = std.fmt.parseInt(u16, args.next() orelse return usage(), 10) catch return usage();
@@ -153,7 +174,7 @@ pub fn main(init: std.process.Init) !void {
 }
 
 fn usage() void {
-    std.debug.print("usage: hallows-persist attach TAG [--reconnect]\n", .{});
+    std.debug.print("usage: hallows-persist attach TAG [--reconnect] | cwd TAG\n", .{});
     std.process.exit(2);
 }
 
@@ -231,6 +252,126 @@ fn querySession(dir: []const u8, name: []const u8, tag: []const u8) ?SessionInfo
     };
     @memcpy(result.label_buf[0..result.label_len], buf[@sizeOf(Info)..len]);
     return result;
+}
+
+/// Ask the session NAME where it is for the client TAG. Returns its
+/// `Where` and writes the directory to `buf`, or returns null if the
+/// session isn't running or doesn't answer (it may be an older daemon).
+fn whereSession(dir: []const u8, name: []const u8, tag: []const u8, buf: []u8) ?struct { Where, []const u8 } {
+    const fd = (connectSession(dir, name) catch return null) orelse return null;
+    defer _ = c.close(fd);
+    sendFrame(fd, .cwd, tag) catch return null;
+
+    var pfd = [_]c.pollfd{.{ .fd = fd, .events = c.POLL.IN, .revents = 0 }};
+    if (c.poll(&pfd, 1, 200) <= 0) return null;
+    var header: [header_len]u8 = undefined;
+    readFull(fd, &header) catch return null;
+    const len = std.mem.readInt(u32, header[1..5], .little);
+    if (@as(Tag, @enumFromInt(header[0])) != .where or
+        len < @sizeOf(Where) or len > @sizeOf(Where) + buf.len) return null;
+
+    var where: [@sizeOf(Where)]u8 = undefined;
+    readFull(fd, &where) catch return null;
+    const path = buf[0 .. len - @sizeOf(Where)];
+    readFull(fd, path) catch return null;
+    return .{ std.mem.bytesToValue(Where, &where), path };
+}
+
+/// `cwd`: print the working directory of the session TAG is attached to,
+/// or, if it isn't attached anywhere, of the last session it was.
+fn printCwd(alloc: Allocator, env: *const std.process.Environ.Map, tag: []const u8) !u8 {
+    const dir = try stateDir(alloc, env);
+    var best: [std.fs.max_path_bytes]u8 = undefined;
+    var best_len: usize = 0;
+    var best_tag: u8 = 0;
+    for (1..max_sessions + 1) |n| {
+        var name_buf: [8]u8 = undefined;
+        const name = sessionName(&name_buf, n);
+        var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+        const where: Where, const path = whereSession(dir, name, tag, &path_buf) orelse where: {
+            // A daemon from before `cwd` existed doesn't answer, but it does
+            // say whether it knows the tag, and its shell is in /proc.
+            const session = querySession(dir, name, tag) orelse continue;
+            if (session.info.knows_tag == 0) continue;
+            const t: u8 = if (session.info.clients > 0) 2 else 1;
+            if (t <= best_tag) continue;
+            break :where .{ .{ .tag = t }, procCwd(dir, name, &path_buf) orelse continue };
+        };
+        if (where.tag <= best_tag or path.len == 0) continue;
+        best_tag = where.tag;
+        @memcpy(best[0..path.len], path);
+        best_len = path.len;
+        if (best_tag == 2) break;
+    }
+    if (best_len == 0) return 1;
+    writeAll(posix.STDOUT_FILENO, best[0..best_len]) catch return 1;
+    return 0;
+}
+
+/// The working directory of the program in the foreground of session
+/// NAME, found from the outside: the daemon's pid from its socket, its
+/// child the shell, and the shell's terminal's foreground process group.
+fn procCwd(dir: []const u8, name: []const u8, buf: []u8) ?[]const u8 {
+    return switch (builtin.os.tag) {
+        .linux => linuxProcCwd(dir, name, buf),
+        else => null,
+    };
+}
+
+extern "c" fn getsockopt(fd: c_int, level: c_int, name: c_int, value: ?*anyopaque, len: *u32) c_int;
+
+fn linuxProcCwd(dir: []const u8, name: []const u8, buf: []u8) ?[]const u8 {
+    const daemon: c.pid_t = daemon: {
+        const fd = (connectSession(dir, name) catch return null) orelse return null;
+        defer _ = c.close(fd);
+        const Ucred = extern struct { pid: c.pid_t, uid: u32, gid: u32 };
+        var cred: Ucred = undefined;
+        var len: u32 = @sizeOf(Ucred);
+        const SOL_SOCKET = 1;
+        const SO_PEERCRED = 17;
+        if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0) return null;
+        break :daemon cred.pid;
+    };
+    if (daemon <= 0) return null;
+
+    var path_buf: [64]u8 = undefined;
+    var file_buf: [1024]u8 = undefined;
+
+    // The daemon's only child is the shell.
+    const children = readProcFile(
+        std.fmt.bufPrintZ(&path_buf, "/proc/{d}/task/{d}/children", .{ daemon, daemon }) catch return null,
+        &file_buf,
+    ) orelse return null;
+    var it = std.mem.tokenizeScalar(u8, children, ' ');
+    const shell = std.fmt.parseInt(c.pid_t, it.next() orelse return null, 10) catch return null;
+
+    // Field 8 of stat is the terminal's foreground process group. The
+    // command name before it is in parentheses and may contain anything.
+    var foreground: c.pid_t = 0;
+    if (readProcFile(
+        std.fmt.bufPrintZ(&path_buf, "/proc/{d}/stat", .{shell}) catch return null,
+        &file_buf,
+    )) |stat| if (std.mem.lastIndexOfScalar(u8, stat, ')')) |paren| {
+        var fields = std.mem.tokenizeScalar(u8, stat[paren + 1 ..], ' ');
+        for (0..5) |_| _ = fields.next();
+        foreground = std.fmt.parseInt(c.pid_t, fields.next() orelse "0", 10) catch 0;
+    };
+
+    for ([_]c.pid_t{ foreground, shell }) |pid| {
+        if (pid <= 0) continue;
+        const path = std.fmt.bufPrintZ(&path_buf, "/proc/{d}/cwd", .{pid}) catch continue;
+        const n = c.readlink(path, buf.ptr, buf.len);
+        if (n > 0) return buf[0..@intCast(n)];
+    }
+    return null;
+}
+
+fn readProcFile(path: [*:0]const u8, buf: []u8) ?[]const u8 {
+    const fd = c.open(path, .{ .ACCMODE = .RDONLY });
+    if (fd < 0) return null;
+    defer _ = c.close(fd);
+    const n = c.read(fd, buf.ptr, buf.len);
+    return if (n > 0) buf[0..@intCast(n)] else null;
 }
 
 fn sessionName(buf: *[8]u8, n: usize) []const u8 {
@@ -627,6 +768,21 @@ const Daemon = struct {
         return if (n > 0) buf[0..@intCast(n)] else buf[0..0];
     }
 
+    /// The working directory of the program in the foreground of the
+    /// session, or of the shell if that can't be found.
+    fn cwd(self: *Daemon, buf: []u8) []const u8 {
+        if (builtin.os.tag != .linux) return buf[0..0];
+        const pgrp = tcgetpgrp(self.pty);
+        for ([_]c.pid_t{ pgrp, self.child }) |pid| {
+            if (pid <= 0) continue;
+            var path_buf: [32]u8 = undefined;
+            const path = std.fmt.bufPrintZ(&path_buf, "/proc/{d}/cwd", .{pid}) catch continue;
+            const n = c.readlink(path, buf.ptr, buf.len);
+            if (n > 0) return buf[0..@intCast(n)];
+        }
+        return buf[0..0];
+    }
+
     fn handle(self: *Daemon, client: *Client, frame: Frame) void {
         switch (frame.tag) {
             .hello => {
@@ -683,6 +839,18 @@ const Daemon = struct {
                 @memcpy(reply[0..@sizeOf(Info)], std.mem.asBytes(&info));
                 const label_len = self.label(reply[@sizeOf(Info)..]).len;
                 self.queue(client, .info, reply[0 .. @sizeOf(Info) + label_len]);
+            },
+            .cwd => {
+                var where: Where = .{ .tag = @intFromBool(self.tags.contains(frame.payload)) };
+                for (self.clients.items) |other| {
+                    if (!other.attached or other.closed) continue;
+                    const t = other.tag orelse continue;
+                    if (std.mem.eql(u8, t, frame.payload)) where.tag = 2;
+                }
+                var reply: [@sizeOf(Where) + std.fs.max_path_bytes]u8 = undefined;
+                @memcpy(reply[0..@sizeOf(Where)], std.mem.asBytes(&where));
+                const len = self.cwd(reply[@sizeOf(Where)..]).len;
+                self.queue(client, .where, reply[0 .. @sizeOf(Where) + len]);
             },
             else => {},
         }

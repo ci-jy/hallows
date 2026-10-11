@@ -370,6 +370,9 @@ pub const Action = union(Key) {
     /// show anymore.
     program_status: ProgramStatus,
 
+    /// Toggle the file tree sidebar of the window containing the target.
+    toggle_file_tree,
+
     /// Sync with: ghostty_action_tag_e
     pub const Key = enum(c_int) {
         quit,
@@ -443,6 +446,7 @@ pub const Action = union(Key) {
         move_tab_to_new_window,
         resize_window,
         program_status,
+        toggle_file_tree,
 
         test "ghostty.h Action.Key" {
             try lib.checkGhosttyHEnum(Key, "GHOSTTY_ACTION_");

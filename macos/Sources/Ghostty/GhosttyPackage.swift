@@ -325,6 +325,9 @@ extension Notification.Name {
     static let ReadonlyKey = ghosttyDidChangeReadonly.rawValue + ".readonly"
     static let ghosttyCommandPaletteDidToggle = Notification.Name("com.mitchellh.ghostty.commandPaletteDidToggle")
 
+    /// Toggle the file tree of the window containing the surface
+    static let ghosttyFileTreeDidToggle = Notification.Name("com.mitchellh.ghostty.fileTreeDidToggle")
+
     /// Toggle maximize of current window
     static let ghosttyMaximizeDidToggle = Notification.Name("com.mitchellh.ghostty.maximizeDidToggle")
 

@@ -812,6 +812,19 @@ pub const Action = union(enum) {
     /// version can be found by running `hallows +version`.
     toggle_command_palette,
 
+    /// Toggle the file tree.
+    ///
+    /// The file tree is a sidebar on the left of the window that shows
+    /// the files of the focused terminal's working directory, or of the
+    /// git repository it is in. Opening a file from the tree opens it in
+    /// your editor in a new split.
+    ///
+    /// The working directory comes from shell integration (OSC 7), so the
+    /// tree is empty for remote shells.
+    ///
+    /// Only implemented on macOS.
+    toggle_file_tree,
+
     /// Toggle the quick terminal.
     ///
     /// The quick terminal, also known as the "Quake-style" or drop-down
@@ -1428,6 +1441,7 @@ pub const Action = union(enum) {
             .toggle_secure_input,
             .toggle_mouse_reporting,
             .toggle_command_palette,
+            .toggle_file_tree,
             .toggle_background_opacity,
             .show_on_screen_keyboard,
             .reset_window_size,

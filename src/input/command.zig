@@ -673,6 +673,12 @@ fn actionCommands(action: Action.Key) []const Command {
             .description = i18n.N_("Toggle whether mouse events are reported to terminal applications."),
         }},
 
+        .toggle_file_tree => comptime &.{.{
+            .action = .toggle_file_tree,
+            .title = i18n.N_("Toggle File Tree"),
+            .description = i18n.N_("Show or hide the file tree sidebar."),
+        }},
+
         .toggle_background_opacity => comptime &.{.{
             .action = .toggle_background_opacity,
             .title = i18n.N_("Toggle Background Opacity"),

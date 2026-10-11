@@ -1321,6 +1321,17 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         ghostty.newTab(surface: surface)
     }
 
+    override func fileTreeOpenTerminal(_ config: Ghostty.SurfaceConfiguration, inNewTab: Bool) {
+        guard inNewTab, let surface = focusedSurface else {
+            super.fileTreeOpenTerminal(config, inNewTab: inNewTab)
+            return
+        }
+        _ = TerminalController.newTab(
+            ghostty,
+            from: window,
+            withBaseConfig: fileTreeConfig(config, from: surface, GHOSTTY_SURFACE_CONTEXT_TAB))
+    }
+
     @IBAction func closeTab(_ sender: Any?) {
         guard let window = window else { return }
         guard window.tabGroup?.windows.count ?? 0 > 1 else {
