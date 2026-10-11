@@ -37,6 +37,7 @@ const App = @import("App.zig");
 const internal_os = @import("os/main.zig");
 const inspectorpkg = @import("inspector/main.zig");
 const SurfaceMouse = @import("surface_mouse.zig");
+const ProgramStatus = @import("surface_program_status.zig");
 const ProcessInfo = @import("pty.zig").ProcessInfo;
 
 const log = std.log.scoped(.surface);
@@ -187,6 +188,14 @@ search: ?Search = null,
 /// Used to rate limit BEL handling.
 last_bell_time: ?std.Io.Timestamp = null,
 
+/// The records programs reported with the program status protocol
+/// (OSC 7501).
+program_status: ProgramStatus = .{},
+
+/// A hash of the last program status action sent to the apprt, so an
+/// update that changes nothing it shows isn't sent again.
+program_status_digest: ?u64 = null,
+
 /// The effect of an input event. This can be used by callers to take
 /// the appropriate action after an input event. For example, key
 /// input can be forwarded to the OS for further processing if it
@@ -311,6 +320,8 @@ const DerivedConfig = struct {
     clipboard_paste_protection: bool,
     clipboard_paste_bracketed_safe: bool,
     clipboard_codepoint_map: configpkg.Config.RepeatableClipboardCodepointMap,
+    program_status: bool,
+    program_status_notify: configpkg.Config.ProgramStatusNotify,
     copy_on_select: configpkg.CopyOnSelect,
     right_click_action: configpkg.RightClickAction,
     middle_click_action: configpkg.MiddleClickAction,
@@ -392,6 +403,8 @@ const DerivedConfig = struct {
             .clipboard_paste_protection = config.@"clipboard-paste-protection",
             .clipboard_paste_bracketed_safe = config.@"clipboard-paste-bracketed-safe",
             .clipboard_codepoint_map = try config.@"clipboard-codepoint-map".clone(alloc),
+            .program_status = config.@"program-status",
+            .program_status_notify = config.@"program-status-notify",
             .copy_on_select = config.@"copy-on-select",
             .right_click_action = config.@"right-click-action",
             .middle_click_action = config.@"middle-click-action",
@@ -841,6 +854,7 @@ pub fn deinit(self: *Surface) void {
     if (self.renderer_state.preedit) |p| self.alloc.free(p.codepoints);
     self.alloc.destroy(self.renderer_state.mutex);
     self.config.deinit();
+    self.program_status.deinit(self.alloc);
 
     log.info("surface closed id={x}", .{self.id});
 }
@@ -1153,6 +1167,8 @@ pub fn handleMessage(self: *Surface, msg: Message) !void {
             };
         },
 
+        .program_status => |v| try self.programStatusMessage(v),
+
         .selection_scroll_tick => |active| {
             self.selection_scroll_active = active;
             try self.selectionScrollTick();
@@ -1264,6 +1280,10 @@ fn selectionScrollTick(self: *Surface) !void {
 fn childExited(self: *Surface, info: apprt.surface.Message.ChildExited) void {
     // Mark our flag that we exited immediately
     self.child_exited = true;
+
+    // The process attached to the terminal is gone, so nothing in it is
+    // still working or waiting on the user.
+    if (self.program_status.endWork(self.alloc)) self.programStatusChanged();
 
     // If our runtime was below some threshold then we assume that this
     // was an abnormal exit and we show an error message.
@@ -1796,6 +1816,12 @@ pub fn updateConfig(
     };
     self.config.deinit();
     self.config = derived;
+
+    // If program status was disabled, stop showing what programs reported.
+    if (!self.config.program_status and self.program_status.records.count() > 0) {
+        self.program_status.reset(self.alloc);
+        self.programStatusChanged();
+    }
 
     // If our mouse is hidden but we disabled mouse hiding, then show it again.
     if (!self.config.mouse_hide_while_typing and self.mouse.hidden) {
@@ -2815,6 +2841,15 @@ pub fn keyCallback(
         event.utf8.len > 0)
     {
         self.hideMouse();
+    }
+
+    // Pressing a key in the surface means the user has seen it, so
+    // finished and failed work is no longer news.
+    if (event.action == .press and
+        !event.key.modifier() and
+        self.program_status.acknowledge(self.alloc))
+    {
+        self.programStatusChanged();
     }
 
     // If our mouse modifiers change we may need to change our
@@ -6615,6 +6650,155 @@ fn crashThreadState(self: *Surface) crash.sentry.ThreadState {
         .type = .main,
         .surface = self,
     };
+}
+
+fn programStatusMessage(
+    self: *Surface,
+    msg: apprt.surface.Message.ProgramStatus,
+) !void {
+    switch (msg) {
+        .report => |v| {
+            defer v.data.deinit();
+
+            // The setting may have changed after the report was sent.
+            if (!self.config.program_status) return;
+
+            const report: ProgramStatus.Report = .{
+                .state = v.state,
+                .data = v.data.slice(),
+            };
+            const previous = try self.program_status.apply(self.alloc, report);
+            if (previous != report.state) self.programStatusNotify(report);
+        },
+
+        .prompt => if (!self.program_status.endWork(self.alloc)) return,
+
+        .reset => {
+            if (self.program_status.records.count() == 0) return;
+            self.program_status.reset(self.alloc);
+        },
+    }
+
+    self.programStatusChanged();
+}
+
+/// Tell the apprt what the surface should show for program status, if
+/// that changed.
+fn programStatusChanged(self: *Surface) void {
+    const osc_status = terminal.osc.program_status;
+    var label_buf: [osc_status.max_title_bytes + 1]u8 = undefined;
+    var msg_buf: [osc_status.max_msg_bytes + 1]u8 = undefined;
+
+    const value: apprt.action.ProgramStatus = value: {
+        const summary = self.program_status.summary() orelse
+            break :value .{ .state = .none };
+        const report = summary.report;
+
+        break :value .{
+            .state = switch (report.state) {
+                .idle => .idle,
+                .working => .working,
+                .done => .done,
+                .blocked => .blocked,
+                .@"error" => .@"error",
+                .clear => unreachable,
+            },
+            .kind = if (report.readOption(.kind)) |kind| switch (kind) {
+                .permission => .permission,
+                .question => .question,
+                .auth => .auth,
+            } else .none,
+            .progress = report.readOption(.progress),
+            .label = label: {
+                const title = displayTextZ(report, .title, &label_buf);
+                if (title.len > 0) break :label title;
+                break :label std.fmt.bufPrintZ(
+                    &label_buf,
+                    "{s}",
+                    .{summary.app orelse ""},
+                ) catch unreachable;
+            },
+            .msg = displayTextZ(report, .msg, &msg_buf),
+        };
+    };
+
+    const digest = digest: {
+        var hash: std.hash.Wyhash = .init(0);
+        std.hash.autoHash(&hash, value.state);
+        std.hash.autoHash(&hash, value.kind);
+        std.hash.autoHash(&hash, value.progress);
+        hash.update(value.label);
+        hash.update(&.{0});
+        hash.update(value.msg);
+        break :digest hash.final();
+    };
+    if (self.program_status_digest == digest) return;
+    self.program_status_digest = digest;
+
+    _ = self.rt_app.performAction(
+        .{ .surface = self },
+        .program_status,
+        value,
+    ) catch |err| {
+        log.warn("apprt failed to show program status err={}", .{err});
+    };
+}
+
+/// Show a desktop notification when a program starts waiting on the
+/// user, finishes, or fails, if configured to.
+fn programStatusNotify(self: *Surface, report: ProgramStatus.Report) void {
+    const what: []const u8 = switch (report.state) {
+        .blocked => if (report.readOption(.kind)) |kind| switch (kind) {
+            .permission => "needs permission",
+            .question => "has a question",
+            .auth => "needs you to sign in",
+        } else "needs your attention",
+        .done => "finished",
+        .@"error" => "failed",
+        .idle, .working, .clear => return,
+    };
+
+    if (!self.config.desktop_notifications) return;
+    switch (self.config.program_status_notify) {
+        .never => return,
+        .unfocused => if (self.focused) return,
+        .always => {},
+    }
+
+    const osc_status = terminal.osc.program_status;
+    var label_buf: [osc_status.max_title_bytes + 1]u8 = undefined;
+    const label: []const u8 = label: {
+        const title = displayTextZ(report, .title, &label_buf);
+        if (title.len > 0) break :label title;
+        if (report.readOption(.app)) |app| break :label app;
+        const id = report.readOption(.id) orelse "";
+        break :label self.program_status.inheritedApp(id) orelse "A program";
+    };
+
+    var title_buf: [osc_status.max_title_bytes + 64]u8 = undefined;
+    const title = std.fmt.bufPrintZ(&title_buf, "{s} {s}", .{ label, what }) catch unreachable;
+
+    var msg_buf: [osc_status.max_msg_bytes + 1]u8 = undefined;
+    const msg = displayTextZ(report, .msg, &msg_buf);
+
+    self.showDesktopNotification(title, msg) catch |err| {
+        log.warn("failed to show program status notification err={}", .{err});
+    };
+}
+
+/// Write the display text of a program status report's `title` or `msg`
+/// into `buf`, null-terminated. `buf` must have room for the longest
+/// value plus the terminator.
+fn displayTextZ(
+    report: ProgramStatus.Report,
+    comptime option: terminal.osc.program_status.Option,
+    buf: []u8,
+) [:0]const u8 {
+    var w: std.Io.Writer = .fixed(buf[0 .. buf.len - 1]);
+    ProgramStatus.writeDisplayText(report, option, &w) catch unreachable;
+    const len = w.buffered().len;
+    buf[len] = 0;
+    return buf[0..len :0];
 }
 
 /// Tell the surface to present itself to the user. This may involve raising the

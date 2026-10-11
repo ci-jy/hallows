@@ -937,6 +937,39 @@ typedef struct {
   ssize_t selected;
 } ghostty_action_search_selected_s;
 
+// apprt.action.ProgramStatus.State
+typedef enum {
+  GHOSTTY_ACTION_PROGRAM_STATUS_STATE_NONE,
+  GHOSTTY_ACTION_PROGRAM_STATUS_STATE_IDLE,
+  GHOSTTY_ACTION_PROGRAM_STATUS_STATE_WORKING,
+  GHOSTTY_ACTION_PROGRAM_STATUS_STATE_DONE,
+  GHOSTTY_ACTION_PROGRAM_STATUS_STATE_BLOCKED,
+  GHOSTTY_ACTION_PROGRAM_STATUS_STATE_ERROR,
+} ghostty_action_program_status_state_e;
+
+// apprt.action.ProgramStatus.Kind
+typedef enum {
+  GHOSTTY_ACTION_PROGRAM_STATUS_KIND_NONE,
+  GHOSTTY_ACTION_PROGRAM_STATUS_KIND_PERMISSION,
+  GHOSTTY_ACTION_PROGRAM_STATUS_KIND_QUESTION,
+  GHOSTTY_ACTION_PROGRAM_STATUS_KIND_AUTH,
+} ghostty_action_program_status_kind_e;
+
+// apprt.action.ProgramStatus.C
+typedef struct {
+  ghostty_action_program_status_state_e state;
+  // -1 if no progress was reported, otherwise 0-100 indicating percent
+  // completeness.
+  int8_t progress;
+  // A ghostty_action_program_status_kind_e value. Only set when state is
+  // BLOCKED.
+  uint8_t kind;
+  // Never NULL. Empty strings if the program sent no value. The text is
+  // untrusted and must not be interpreted as markup.
+  const char* label;
+  const char* msg;
+} ghostty_action_program_status_s;
+
 // terminal.Scrollbar
 typedef struct {
   uint64_t total;
@@ -1016,6 +1049,7 @@ typedef enum {
   GHOSTTY_ACTION_COPY_TITLE_TO_CLIPBOARD,
   GHOSTTY_ACTION_MOVE_TAB_TO_NEW_WINDOW,
   GHOSTTY_ACTION_RESIZE_WINDOW,
+  GHOSTTY_ACTION_PROGRAM_STATUS,
 } ghostty_action_tag_e;
 
 typedef union {
@@ -1060,6 +1094,7 @@ typedef union {
   ghostty_action_search_selected_s search_selected;
   ghostty_action_readonly_e readonly;
   ghostty_action_open_config_e open_config;
+  ghostty_action_program_status_s program_status;
 } ghostty_action_u;
 
 typedef struct {

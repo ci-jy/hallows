@@ -775,6 +775,10 @@ pub const Application = extern struct {
             // GTK has no accessibility consumer for this yet.
             .selection_changed => {},
 
+            // GTK doesn't show program status yet. This changes often,
+            // so it isn't logged with the unimplemented actions below.
+            .program_status => return false,
+
             .scrollbar => Action.scrollbar(target, value),
 
             .set_title => Action.setTitle(target, value),

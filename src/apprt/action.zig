@@ -364,6 +364,12 @@ pub const Action = union(Key) {
     /// split or the window is fullscreen.
     resize_window: ResizeWindow,
 
+    /// The status programs in the surface report with the program status
+    /// protocol (OSC 7501) changed. This carries the one record the
+    /// surface should show. A state of `none` means there is nothing to
+    /// show anymore.
+    program_status: ProgramStatus,
+
     /// Sync with: ghostty_action_tag_e
     pub const Key = enum(c_int) {
         quit,
@@ -436,6 +442,7 @@ pub const Action = union(Key) {
         copy_title_to_clipboard,
         move_tab_to_new_window,
         resize_window,
+        program_status,
 
         test "ghostty.h Action.Key" {
             try lib.checkGhosttyHEnum(Key, "GHOSTTY_ACTION_");
@@ -738,6 +745,69 @@ pub const InitialSize = extern struct {
 
         .none => void,
     };
+};
+
+pub const ProgramStatus = struct {
+    state: State,
+    kind: Kind = .none,
+
+    /// 0 to 100, or null if the state isn't `working` or `blocked` or the
+    /// program has no percentage to report.
+    progress: ?u8 = null,
+
+    /// A short label for the record: its title, or the name of the
+    /// program, such as `cargo`, if it has no title. Empty if neither is
+    /// known.
+    label: [:0]const u8 = "",
+
+    /// One line of text saying what the program is doing, waiting for,
+    /// or has finished. Empty if the program sent none.
+    msg: [:0]const u8 = "",
+
+    pub const State = enum(c_int) {
+        none,
+        idle,
+        working,
+        done,
+        blocked,
+        @"error",
+
+        test "ghostty.h ProgramStatus.State" {
+            try lib.checkGhosttyHEnum(State, "GHOSTTY_ACTION_PROGRAM_STATUS_STATE_");
+        }
+    };
+
+    pub const Kind = enum(c_int) {
+        none,
+        permission,
+        question,
+        auth,
+
+        test "ghostty.h ProgramStatus.Kind" {
+            try lib.checkGhosttyHEnum(Kind, "GHOSTTY_ACTION_PROGRAM_STATUS_KIND_");
+        }
+    };
+
+    // Sync with: ghostty_action_program_status_s
+    //
+    // The kind is a byte so the struct fits in the action union.
+    pub const C = extern struct {
+        state: State,
+        progress: i8,
+        kind: u8,
+        label: [*:0]const u8,
+        msg: [*:0]const u8,
+    };
+
+    pub fn cval(self: ProgramStatus) C {
+        return .{
+            .state = self.state,
+            .progress = if (self.progress) |v| @intCast(@min(v, 100)) else -1,
+            .kind = @intCast(@intFromEnum(self.kind)),
+            .label = self.label.ptr,
+            .msg = self.msg.ptr,
+        };
+    }
 };
 
 pub const ResizeWindow = extern struct {

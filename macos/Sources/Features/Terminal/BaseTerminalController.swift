@@ -97,6 +97,18 @@ class BaseTerminalController: NSWindowController,
     /// Cancellable for aggregating bell state across all surfaces in this controller.
     private var bellStateCancellable: AnyCancellable?
 
+    /// Cancellable for aggregating program status across all surfaces in this controller.
+    private var programStatusCancellable: AnyCancellable?
+
+    /// The most urgent program status (OSC 7501) of any surface in this
+    /// controller, shown as a symbol in front of the title.
+    private var programStatusState: Ghostty.Action.ProgramStatus.State? {
+        didSet {
+            guard programStatusState != oldValue else { return }
+            applyTitleToWindow()
+        }
+    }
+
     /// Cancellable for clipboard confirmation requests from surfaces in this controller.
     private var clipboardConfirmationCancellable: AnyCancellable?
 
@@ -155,6 +167,7 @@ class BaseTerminalController: NSWindowController,
 
         // Setup our bell state for the window
         setupBellNotificationPublisher()
+        setupProgramStatusPublisher()
         setupClipboardConfirmationPublisher()
 
         // Setup our notifications for behaviors
@@ -917,13 +930,25 @@ class BaseTerminalController: NSWindowController,
         guard let window else { return }
 
         if let titleOverride {
-            window.title = computeTitle(
+            window.title = programStatusPrefix + computeTitle(
                 title: titleOverride,
                 bell: focusedSurface?.bell ?? false)
             return
         }
 
-        window.title = lastComputedTitle
+        window.title = programStatusPrefix + lastComputedTitle
+    }
+
+    /// A symbol for the most urgent program status in this controller, so
+    /// a tab shows what its programs are doing without switching to it.
+    private var programStatusPrefix: String {
+        switch programStatusState {
+        case nil, .idle: return ""
+        case .working: return "⏳ "
+        case .done: return "✅ "
+        case .error: return "❌ "
+        case .blocked: return "✋ "
+        }
     }
 
     func pwdDidChange(to: URL?) {
@@ -1704,6 +1729,20 @@ extension BaseTerminalController {
                     object: self,
                     userInfo: [Notification.Name.terminalWindowHasBellKey: hasBell]
                 )
+            }
+    }
+
+    /// Tracks the most urgent program status of all surfaces in this controller.
+    private func setupProgramStatusPublisher() {
+        programStatusCancellable = surfaceValuesPublisher(
+            valueKeyPath: \.programStatus,
+            publisherKeyPath: \.$programStatus
+        )
+            .map { $0.values.compactMap { $0?.state }.max() }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                self?.programStatusState = state
             }
     }
 

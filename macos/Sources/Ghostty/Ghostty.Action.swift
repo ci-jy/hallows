@@ -107,6 +107,74 @@ extension Ghostty.Action {
         let progress: UInt8?
     }
 
+    /// What the programs in a surface report with the program status
+    /// protocol (OSC 7501). The core picks the one record to show.
+    struct ProgramStatus: Equatable {
+        /// Ordered from least to most in need of the user.
+        enum State: Int, Comparable {
+            case idle
+            case working
+            case done
+            case error
+            case blocked
+
+            init?(_ c: ghostty_action_program_status_state_e) {
+                switch c {
+                case GHOSTTY_ACTION_PROGRAM_STATUS_STATE_IDLE: self = .idle
+                case GHOSTTY_ACTION_PROGRAM_STATUS_STATE_WORKING: self = .working
+                case GHOSTTY_ACTION_PROGRAM_STATUS_STATE_DONE: self = .done
+                case GHOSTTY_ACTION_PROGRAM_STATUS_STATE_BLOCKED: self = .blocked
+                case GHOSTTY_ACTION_PROGRAM_STATUS_STATE_ERROR: self = .error
+                default: return nil
+                }
+            }
+
+            static func < (lhs: State, rhs: State) -> Bool {
+                lhs.rawValue < rhs.rawValue
+            }
+        }
+
+        /// What a blocked program needs from the user.
+        enum Kind {
+            case none
+            case permission
+            case question
+            case auth
+
+            init(_ c: UInt8) {
+                switch ghostty_action_program_status_kind_e(rawValue: UInt32(c)) {
+                case GHOSTTY_ACTION_PROGRAM_STATUS_KIND_PERMISSION: self = .permission
+                case GHOSTTY_ACTION_PROGRAM_STATUS_KIND_QUESTION: self = .question
+                case GHOSTTY_ACTION_PROGRAM_STATUS_KIND_AUTH: self = .auth
+                default: self = .none
+                }
+            }
+        }
+
+        let state: State
+        let kind: Kind
+        let progress: UInt8?
+
+        /// The record's title or the program's name. May be empty. This is
+        /// untrusted text from the program, so never treat it as markup.
+        let label: String
+
+        /// What the program is doing, waiting for, or has finished. May be
+        /// empty. This is untrusted text from the program, so never treat it
+        /// as markup.
+        let msg: String
+
+        /// Returns nil when there is no status to show.
+        init?(c: ghostty_action_program_status_s) {
+            guard let state = State(c.state) else { return nil }
+            self.state = state
+            self.kind = Kind(c.kind)
+            self.progress = c.progress >= 0 ? UInt8(c.progress) : nil
+            self.label = String(cString: c.label)
+            self.msg = String(cString: c.msg)
+        }
+    }
+
     struct Scrollbar {
         let total: UInt64
         let offset: UInt64

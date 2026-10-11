@@ -90,6 +90,12 @@ extension Ghostty {
                     }
                 }
 
+                // Program status badge, below the readonly badge if both show.
+                if let status = surfaceView.programStatus, status.state != .idle {
+                    ProgramStatusBadge(status: status)
+                        .padding(.top, surfaceView.readonly ? 32 : 0)
+                }
+
                 // Show key state indicator for active key tables and/or pending key sequences
                 KeyStateIndicator(
                     keyTables: surfaceView.keyTables,
@@ -1022,6 +1028,107 @@ extension Ghostty {
                     RoundedRectangle(cornerRadius: 6)
                         .strokeBorder(Color.orange.opacity(0.6), lineWidth: 1.5)
                 )
+        }
+    }
+
+    /// Shows what a program in the surface reports with the program status
+    /// protocol (OSC 7501): working, done, waiting on the user, or failed.
+    struct ProgramStatusBadge: View {
+        let status: Ghostty.Action.ProgramStatus
+
+        private var symbol: String {
+            switch status.state {
+            case .idle, .working: return "hourglass"
+            case .done: return "checkmark.circle.fill"
+            case .error: return "xmark.octagon.fill"
+            case .blocked:
+                switch status.kind {
+                case .permission: return "hand.raised.fill"
+                case .question: return "questionmark.bubble.fill"
+                case .auth: return "key.fill"
+                case .none: return "exclamationmark.bubble.fill"
+                }
+            }
+        }
+
+        private var color: Color {
+            switch status.state {
+            case .idle, .working: return .accentColor
+            case .done: return .green
+            case .error: return .red
+            case .blocked: return .orange
+            }
+        }
+
+        private var stateDescription: String {
+            switch status.state {
+            case .idle: return "Idle"
+            case .working: return "Working"
+            case .done: return "Finished"
+            case .error: return "Failed"
+            case .blocked:
+                switch status.kind {
+                case .permission: return "Needs permission"
+                case .question: return "Has a question"
+                case .auth: return "Needs you to sign in"
+                case .none: return "Needs your attention"
+                }
+            }
+        }
+
+        /// The tooltip and accessibility text. The label and message are
+        /// untrusted text from the program, so they are only ever shown
+        /// verbatim.
+        private var description: String {
+            var lines = [stateDescription]
+            if !status.label.isEmpty { lines[0] = "\(status.label): \(stateDescription)" }
+            if let progress = status.progress { lines.append("\(progress)%") }
+            if !status.msg.isEmpty { lines.append(status.msg) }
+            return lines.joined(separator: "\n")
+        }
+
+        var body: some View {
+            VStack {
+                HStack {
+                    Spacer()
+
+                    HStack(spacing: 5) {
+                        Image(systemName: symbol)
+                            .font(.system(size: 12))
+                            .foregroundStyle(color)
+
+                        if !status.label.isEmpty {
+                            Text(verbatim: status.label)
+                                .font(.system(size: 12, weight: .medium))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: 160, alignment: .leading)
+                        }
+
+                        if let progress = status.progress {
+                            Text(verbatim: "\(progress)%")
+                                .font(.system(size: 12, weight: .medium).monospacedDigit())
+                        }
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(.regularMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .strokeBorder(color.opacity(0.6), lineWidth: 1.5)
+                            )
+                    )
+                    .help(Text(verbatim: description))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(verbatim: description))
+                }
+                .padding(8)
+
+                Spacer()
+            }
+            .transition(.opacity)
         }
     }
 

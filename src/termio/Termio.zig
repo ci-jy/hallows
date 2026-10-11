@@ -195,6 +195,7 @@ pub const DerivedConfig = struct {
     enquiry_response: []const u8,
     xt_checksum_report: bool,
     xt_checksum_extension: terminalpkg.xt_checksum.Flags,
+    program_status: bool,
     conditional_state: configpkg.ConditionalState,
 
     pub fn init(
@@ -234,6 +235,7 @@ pub const DerivedConfig = struct {
             .enquiry_response = try alloc.dupe(u8, config.@"enquiry-response"),
             .xt_checksum_report = config.@"vt-xt-checksum-report",
             .xt_checksum_extension = xtChecksumFlags(config.@"vt-xt-checksum-extension"),
+            .program_status = config.@"program-status",
             .conditional_state = config._conditional_state,
 
             // This has to be last so that we copy AFTER the arena allocations
@@ -325,6 +327,7 @@ pub fn init(self: *Termio, alloc: Allocator, opts: termio.Options) !void {
         .clipboard_write_limit = opts.config.clipboard_write_limit,
         .enquiry_response = opts.config.enquiry_response,
         .xt_checksum_report = opts.config.xt_checksum_report,
+        .program_status = opts.config.program_status,
     };
 
     const thread_enter_state = try ThreadEnterState.create(

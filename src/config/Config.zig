@@ -3893,6 +3893,35 @@ else
 /// If `false`, progress bar sequences are silently ignored.
 @"progress-style": bool = true,
 
+/// If `true` (default), programs running in the terminal can report what
+/// they are doing using the program status protocol (OSC 7501): working,
+/// done, waiting on you, or failed. Ghostty shows the status on the
+/// surface and its tab, and can show a desktop notification, see
+/// `program-status-notify`.
+///
+/// If `false`, program status reports are silently ignored and Ghostty
+/// doesn't answer a program that asks whether the protocol is supported.
+///
+/// The status is only shown on macOS at the moment.
+///
+/// Available since: 1.4.0
+@"program-status": bool = true,
+
+/// When to show a desktop notification for a program status report
+/// (OSC 7501). A notification is shown when a program starts waiting on
+/// you, finishes, or fails. This requires `program-status` and
+/// `desktop-notifications` to be enabled.
+///
+/// Available options:
+///
+/// * `never` - Never show notifications.
+/// * `unfocused` - Only show notifications if the surface the program is
+///   running in is not focused. This is the default.
+/// * `always` - Always show notifications.
+///
+/// Available since: 1.4.0
+@"program-status-notify": ProgramStatusNotify = .unfocused,
+
 /// Modifies the color used for bold text in the terminal.
 ///
 /// This can be set to a specific color, using the same format as
@@ -10531,6 +10560,13 @@ pub const ScrollToBottom = packed struct {
 
 /// See notify-on-command-finish
 pub const NotifyOnCommandFinish = enum {
+    never,
+    unfocused,
+    always,
+};
+
+/// See program-status-notify
+pub const ProgramStatusNotify = enum {
     never,
     unfocused,
     always,

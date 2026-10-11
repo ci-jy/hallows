@@ -722,6 +722,9 @@ extension Ghostty {
             case GHOSTTY_ACTION_PROGRESS_REPORT:
                 progressReport(app, target: target, v: action.action.progress_report)
 
+            case GHOSTTY_ACTION_PROGRAM_STATUS:
+                programStatus(app, target: target, v: action.action.program_status)
+
             case GHOSTTY_ACTION_CONFIG_CHANGE:
                 configChange(app, target: target, v: action.action.config_change)
 
@@ -2254,6 +2257,31 @@ extension Ghostty {
                     } else {
                         surfaceView.progressReport = progressReport
                     }
+                }
+
+            default:
+                assertionFailure()
+            }
+        }
+
+        private static func programStatus(
+            _ app: ghostty_app_t,
+            target: ghostty_target_s,
+            v: ghostty_action_program_status_s) {
+            switch target.tag {
+            case GHOSTTY_TARGET_APP:
+                Ghostty.logger.warning("program status does nothing with an app target")
+                return
+
+            case GHOSTTY_TARGET_SURFACE:
+                guard let surface = target.target.surface else { return }
+                guard let surfaceView = self.surfaceView(from: surface) else { return }
+
+                // The strings are only valid during this call, so copy
+                // them before we hop to the main thread.
+                let status = Ghostty.Action.ProgramStatus(c: v)
+                DispatchQueue.main.async {
+                    surfaceView.programStatus = status
                 }
 
             default:

@@ -32,6 +32,10 @@ extension Ghostty {
         // The progress report (if any)
         @Published var progressReport: Action.ProgressReport?
 
+        // What the programs in this surface report about themselves with
+        // the program status protocol (OSC 7501), if anything.
+        @Published var programStatus: Action.ProgramStatus?
+
         // The currently active key tables. Empty if no tables are active.
         @Published var keyTables: [String] = []
 

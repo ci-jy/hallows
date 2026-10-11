@@ -59,6 +59,9 @@ pub const StreamHandler = struct {
     /// and XTCHECKSUM may change how it's calculated.
     xt_checksum_report: bool,
 
+    /// Whether programs can report their status with OSC 7501.
+    program_status: bool,
+
     //---------------------------------------------------------------
     // Internal state
 
@@ -125,6 +128,7 @@ pub const StreamHandler = struct {
         self.clipboard_write_limit = config.clipboard_write_limit;
         self.enquiry_response = config.enquiry_response;
         self.xt_checksum_report = config.xt_checksum_report;
+        self.program_status = config.program_status;
         self.terminal.setDefaultCursorStyle(config.cursor_style);
         self.terminal.setDefaultCursorBlink(config.cursor_blink);
         self.terminal.setDefaultXtChecksum(config.xt_checksum_extension);
@@ -349,6 +353,7 @@ pub const StreamHandler = struct {
             .report_pwd => try self.reportPwd(value.url),
             .show_desktop_notification => try self.showDesktopNotification(value.title, value.body),
             .progress_report => self.progressReport(value),
+            .program_status => try self.programStatus(value),
             .start_hyperlink => try self.startHyperlink(value.uri, value.id),
             .clipboard_contents => try self.clipboardContents(value.kind, value.data),
             .semantic_prompt => try self.semanticPrompt(value),
@@ -389,7 +394,6 @@ pub const StreamHandler = struct {
             .title_pop,
             .kitty_dnd,
             .osc_unknown,
-            .program_status,
             => {},
         }
     }
@@ -928,6 +932,9 @@ pub const StreamHandler = struct {
 
         // Clear the progress bar
         self.progressReport(.{ .state = .remove });
+
+        // A full reset removes every program status record.
+        self.surfaceMessageWriter(.{ .program_status = .reset });
     }
 
     /// Record a Kitty clipboard protocol session grant so future
@@ -1467,6 +1474,13 @@ pub const StreamHandler = struct {
                 self.surfaceMessageWriter(.start_command);
             },
 
+            // A new prompt means the program that was running is gone.
+            .fresh_line_new_prompt,
+            .new_command,
+            => if (self.program_status) {
+                self.surfaceMessageWriter(.{ .program_status = .prompt });
+            },
+
             .end_command => {
                 // The specification seems to not specify the type but
                 // other terminals accept 32-bits, but exit codes are really
@@ -1483,8 +1497,6 @@ pub const StreamHandler = struct {
             .end_prompt_start_input,
             .end_prompt_start_input_terminate_eol,
             .fresh_line,
-            .fresh_line_new_prompt,
-            .new_command,
             .prompt_start,
             => {},
         }
@@ -1926,6 +1938,32 @@ pub const StreamHandler = struct {
     /// Display a GUI progress report.
     fn progressReport(self: *StreamHandler, report: terminal.osc.Command.ProgressReport) void {
         self.surfaceMessageWriter(.{ .progress_report = report });
+    }
+
+    /// Handle the program status protocol (OSC 7501). The surface keeps
+    /// the records, so reports are passed along to it.
+    fn programStatus(
+        self: *StreamHandler,
+        cmd: terminal.osc.Command.ProgramStatus,
+    ) !void {
+        if (!self.program_status) return;
+
+        switch (cmd) {
+            .query => |terminator| switch (terminator) {
+                inline else => |t| self.messageWriter(.{
+                    .write_stable = "\x1b]7501;" ++
+                        terminal.osc.program_status.query_reply ++
+                        comptime t.string(),
+                }),
+            },
+
+            .report => |report| self.surfaceMessageWriter(.{ .program_status = .{
+                .report = .{
+                    .state = report.state,
+                    .data = try .init(self.alloc, report.data),
+                },
+            } }),
+        }
     }
 };
 

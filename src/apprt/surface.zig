@@ -140,6 +140,9 @@ pub const Message = union(enum) {
     /// Report the progress of an action using a GUI element
     progress_report: terminal.osc.Command.ProgressReport,
 
+    /// An event for the program status records (OSC 7501).
+    program_status: ProgramStatus,
+
     /// A command has started in the shell, start a timer.
     start_command,
 
@@ -159,6 +162,22 @@ pub const Message = union(enum) {
 
     /// Renderer pushed a new frame, redraw this surface.
     redraw,
+
+    pub const ProgramStatus = union(enum) {
+        /// A program sent a status report. The data is the body of the
+        /// report, already validated by the parser, and must be freed
+        /// by the receiver.
+        report: struct {
+            state: terminal.osc.Command.ProgramStatus.State,
+            data: WriteReq,
+        },
+
+        /// A new shell prompt began (OSC 133 A).
+        prompt,
+
+        /// The terminal was fully reset (RIS).
+        reset,
+    };
 
     pub const ReportTitleStyle = enum {
         csi_21_t,
