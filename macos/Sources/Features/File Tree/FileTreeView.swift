@@ -7,28 +7,47 @@ import UniformTypeIdentifiers
 struct FileTreeSidebar: View {
     @ObservedObject var model: FileTreeModel
 
+    /// The card's background color and opacity, the same as the terminal panes'.
+    let background: Color
+    let backgroundOpacity: Double
+
     @State private var dragStartWidth: CGFloat?
 
     private static let widthRange: ClosedRange<CGFloat> = 150...600
 
+    private static let resizeHandleWidth: CGFloat = TerminalPane.spacing + 4
+
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
             content
+                // Keep the rows clear of the card's rounded bottom corners.
+                .padding(.bottom, TerminalPane.contentInset)
         }
         .frame(width: model.width)
-        .background(VisualEffectBackground().ignoresSafeArea())
-        .overlay(alignment: .trailing) { resizeHandle }
+        .background {
+            ZStack {
+                TerminalPaneGlass(tint: background)
+                TerminalPane.shape.fill(background.opacity(backgroundOpacity))
+            }
+        }
+        .clipShape(TerminalPane.shape)
+        .overlay { TerminalPaneBorder() }
+        .terminalPaneCardBounds()
+        // The handle sits over the gap between the sidebar and the panes.
+        .overlay(alignment: .trailing) {
+            resizeHandle.offset(x: (Self.resizeHandleWidth + TerminalPane.spacing) / 2)
+        }
     }
 
     private var header: some View {
-        HStack(spacing: 6) {
-            if let host = model.host {
-                Image(systemName: "network")
-                    .foregroundStyle(.secondary)
-                    .help("Files on \(host)")
-            }
+        HStack(spacing: 7) {
+            Image(systemName: model.host == nil ? "folder" : "network")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 16, height: 16)
+                .help(model.host.map { "Files on \($0)" } ?? "")
+
             VStack(alignment: .leading, spacing: 0) {
                 Text(model.root.map { ($0 as NSString).lastPathComponent } ?? "Files")
                     .font(.system(size: 12, weight: .semibold))
@@ -45,12 +64,9 @@ struct FileTreeSidebar: View {
 
             Spacer(minLength: 0)
 
-            Button {
+            TerminalPaneHeaderButton(symbol: "rectangle.compress.vertical", help: "Collapse All") {
                 model.collapseAll()
-            } label: {
-                Image(systemName: "rectangle.compress.vertical")
             }
-            .help("Collapse All")
 
             Menu {
                 Toggle("Show Hidden Files", isOn: $model.showHidden)
@@ -64,8 +80,11 @@ struct FileTreeSidebar: View {
             .help("Options")
         }
         .buttonStyle(.borderless)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .foregroundStyle(.secondary)
+        .padding(.leading, 11)
+        .padding(.trailing, 7)
+        .padding(.vertical, 4)
+        .frame(minHeight: TerminalPane.headerHeight)
     }
 
     @ViewBuilder
@@ -108,7 +127,7 @@ struct FileTreeSidebar: View {
 
     private var resizeHandle: some View {
         Color.clear
-            .frame(width: 6)
+            .frame(width: Self.resizeHandleWidth)
             .contentShape(Rectangle())
             .onHover { inside in
                 if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
@@ -124,18 +143,6 @@ struct FileTreeSidebar: View {
                     .onEnded { _ in dragStartWidth = nil }
             )
     }
-}
-
-private struct VisualEffectBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .sidebar
-        view.blendingMode = .behindWindow
-        view.state = .followsWindowActiveState
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 // MARK: Outline

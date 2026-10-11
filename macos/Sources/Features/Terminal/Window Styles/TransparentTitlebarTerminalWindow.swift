@@ -98,7 +98,7 @@ class TransparentTitlebarTerminalWindow: TerminalWindow {
 
             titlebarView.layer?.backgroundColor = (isGlassStyle && isTransparentTitlebar)
                 ? NSColor.clear.cgColor
-                : preferredBackgroundColor?.cgColor
+                : preferredBackgroundColor?.paneChromeColor.cgColor
         }
 
         // In all cases, we have to hide the background view since this has multiple subviews
@@ -122,7 +122,7 @@ class TransparentTitlebarTerminalWindow: TerminalWindow {
 
         // Setup the titlebar background color to match ours
         titlebarContainer.wantsLayer = true
-        titlebarContainer.layer?.backgroundColor = preferredBackgroundColor?.cgColor
+        titlebarContainer.layer?.backgroundColor = preferredBackgroundColor?.paneChromeColor.cgColor
 
         // See the docs for the function that sets this to true on why
         effectViewIsHidden = false

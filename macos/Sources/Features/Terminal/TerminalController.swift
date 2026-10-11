@@ -1122,6 +1122,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // without waiting for @FocusedValue to propagate through the
         // SwiftUI focus chain.
         container.initialContentSize = focusedSurface?.initialSize
+            .map(TerminalPane.windowContentSize(forSurface:))
 
         window.contentView = container
 

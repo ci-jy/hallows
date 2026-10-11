@@ -19,7 +19,7 @@ const GitVersion = @import("GitVersion.zig");
 /// Standard build configuration options.
 optimize: std.builtin.OptimizeMode,
 target: std.Build.ResolvedTarget,
-xcframework_target: XCFrameworkTarget = .universal,
+xcframework_target: XCFrameworkTarget = .arm64,
 wasm_target: WasmTarget,
 
 /// Comptime interfaces
@@ -58,7 +58,6 @@ emit_terminfo: bool = false,
 emit_termcap: bool = false,
 emit_hallows_persist: bool = false,
 emit_test_exe: bool = false,
-emit_themes: bool = false,
 emit_xcframework: bool = false,
 emit_webdata: bool = false,
 emit_unicode_table_gen: bool = false,
@@ -184,8 +183,8 @@ pub fn init(b: *std.Build, appVersion: []const u8, libVersion: []const u8) !Conf
     config.xcframework_target = b.option(
         XCFrameworkTarget,
         "xcframework-target",
-        "The target for the xcframework.",
-    ) orelse .universal;
+        "The target for the xcframework. Defaults to arm64 (Apple Silicon).",
+    ) orelse .arm64;
 
     //---------------------------------------------------------------
     // Comptime Interfaces
@@ -527,12 +526,6 @@ pub fn init(b: *std.Build, appVersion: []const u8, libVersion: []const u8) !Conf
         bool,
         "emit-hallows-persist",
         "Build and install hallows-persist, the remote half of the ssh-persist shell integration feature, for the remote platforms it supports",
-    ) orelse true;
-
-    config.emit_themes = b.option(
-        bool,
-        "emit-themes",
-        "Install bundled iTerm2-Color-Schemes Ghostty themes",
     ) orelse true;
 
     config.emit_webdata = b.option(

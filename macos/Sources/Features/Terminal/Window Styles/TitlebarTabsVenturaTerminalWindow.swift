@@ -150,9 +150,9 @@ class TitlebarTabsVenturaTerminalWindow: TerminalWindow {
 
         // Update our titlebar color
         if let preferredBackgroundColor {
-            titlebarColor = preferredBackgroundColor
+            titlebarColor = preferredBackgroundColor.paneChromeColor
         } else {
-            titlebarColor = derivedConfig.backgroundColor.withAlphaComponent(derivedConfig.backgroundOpacity)
+            titlebarColor = derivedConfig.backgroundColor.paneChromeColor.withAlphaComponent(derivedConfig.backgroundOpacity)
         }
 
         if isOpaque || themeChanged {

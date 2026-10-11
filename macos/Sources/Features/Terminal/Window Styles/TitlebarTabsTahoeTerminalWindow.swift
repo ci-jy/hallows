@@ -1,4 +1,6 @@
 import AppKit
+import Combine
+import IOKit
 import SwiftUI
 
 /// `macos-titlebar-style = tabs` for macOS 26 (Tahoe) and later.
@@ -59,6 +61,7 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
             // If we don't do this then on launch windows with restored state with tabs will end
             // up with messed up tab bars that don't show all tabs.
             self.setupTabBar()
+            self.installTitlebarAccessories()
         }
     }
 
@@ -68,6 +71,8 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         // Check if we have a tab bar and set it up if we have to. See the comment
         // on this function to learn why we need to check this here.
         setupTabBar()
+        installTitlebarAccessories()
+        machineModel.follow((windowController as? BaseTerminalController)?.focusedSurface)
 
         viewModel.isMainWindow = true
     }
@@ -178,11 +183,13 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         let container = toolbarView
 
         // The padding for the tab bar. If we're showing window buttons then
-        // we need to offset the window buttons.
-        let leftPadding: CGFloat = switch self.derivedConfig.macosWindowButtons {
+        // we need to offset the window buttons. The machine item sits between
+        // the buttons and the tabs, and the command palette button after them.
+        let buttonsPadding: CGFloat = switch self.derivedConfig.macosWindowButtons {
         case .hidden: 0
         case .visible: 70
         }
+        installTitlebarAccessories()
 
         // Constrain the accessory clip view (the parent of the accessory view
         // usually that clips the children) to the container view.
@@ -191,8 +198,13 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
 
         // Setup all our constraints
         NSLayoutConstraint.activate([
-            clipView.leftAnchor.constraint(equalTo: container.leftAnchor, constant: leftPadding),
-            clipView.rightAnchor.constraint(equalTo: container.rightAnchor),
+            // Pinned to the machine item, so the tabs move when its name changes.
+            machineView.superview === titlebarView
+                ? clipView.leftAnchor.constraint(equalTo: machineView.rightAnchor, constant: 14)
+                : clipView.leftAnchor.constraint(equalTo: container.leftAnchor, constant: buttonsPadding),
+            commandPaletteButton.superview === titlebarView
+                ? clipView.rightAnchor.constraint(equalTo: commandPaletteButton.leftAnchor, constant: -8)
+                : clipView.rightAnchor.constraint(equalTo: container.rightAnchor),
             clipView.topAnchor.constraint(equalTo: container.topAnchor, constant: 2),
             clipView.heightAnchor.constraint(equalTo: container.heightAnchor),
             accessoryView.leftAnchor.constraint(equalTo: clipView.leftAnchor),
@@ -245,6 +257,61 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
         self.tabBarObserver = nil
     }
 
+    // MARK: Titlebar Accessories
+
+    /// The machine the terminals run on, after the window buttons.
+    private lazy var machineView: NSView = ClickThroughHostingView(rootView: MachineItem(model: machineModel))
+
+    /// The machine the focused terminal is on.
+    private let machineModel = MachineModel()
+
+    override func focusedSurfaceDidChange(_ surface: Ghostty.SurfaceView?) {
+        machineModel.follow(surface)
+    }
+
+    /// Opens the command palette, at the end of the titlebar.
+    private lazy var commandPaletteButton: NSButton = {
+        let button = NSButton(
+            image: NSImage(systemSymbolName: "command", accessibilityDescription: "Command Palette")!,
+            target: nil,
+            action: #selector(BaseTerminalController.toggleCommandPalette(_:)))
+        button.isBordered = false
+        button.symbolConfiguration = .init(pointSize: 15, weight: .regular)
+        button.contentTintColor = .secondaryLabelColor
+        button.toolTip = "Command Palette"
+        return button
+    }()
+
+    /// Add the machine item and command palette button to the titlebar. These
+    /// aren't toolbar items because the toolbar would move them into its
+    /// overflow menu to make room for the title. Safe to call repeatedly.
+    private func installTitlebarAccessories() {
+        guard let titlebarView,
+              let toolbarView = titlebarView.firstDescendant(withClassName: "NSToolbarView")
+        else { return }
+
+        // The titlebar view is replaced in fullscreen, so check where we are.
+        if machineView.superview === titlebarView { return }
+        machineView.removeFromSuperview()
+        commandPaletteButton.removeFromSuperview()
+
+        let buttonsPadding: CGFloat = switch derivedConfig.macosWindowButtons {
+        case .hidden: 0
+        case .visible: 70
+        }
+
+        for view in [machineView, commandPaletteButton] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            titlebarView.addSubview(view)
+        }
+        NSLayoutConstraint.activate([
+            machineView.leftAnchor.constraint(equalTo: titlebarView.leftAnchor, constant: buttonsPadding),
+            machineView.centerYAnchor.constraint(equalTo: toolbarView.centerYAnchor),
+            commandPaletteButton.rightAnchor.constraint(equalTo: titlebarView.rightAnchor, constant: -14),
+            commandPaletteButton.centerYAnchor.constraint(equalTo: toolbarView.centerYAnchor),
+        ])
+    }
+
     // MARK: NSToolbarDelegate
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -290,6 +357,108 @@ class TitlebarTabsTahoeTerminalWindow: TransparentTitlebarTerminalWindow, NSTool
 extension NSToolbarItem.Identifier {
     /// Displays the title of the window
     static let title = NSToolbarItem.Identifier("Title")
+}
+
+extension TitlebarTabsTahoeTerminalWindow {
+    /// The machine the focused terminal is on: its name over its model.
+    struct MachineItem: View {
+        @ObservedObject var model: MachineModel
+
+        var body: some View {
+            HStack(spacing: 8) {
+                Image(systemName: model.machine.symbol)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20)
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(verbatim: model.machine.name)
+                        .font(.system(size: 12.5, weight: .semibold))
+                    Text(verbatim: model.machine.model)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+                .lineLimit(1)
+                .truncationMode(.tail)
+            }
+            .frame(maxWidth: 170, alignment: .leading)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.leading, 6)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// Tracks which machine the focused terminal is on: this Mac, or the host
+    /// it's connected to over ssh.
+    @MainActor
+    final class MachineModel: ObservableObject {
+        @Published private(set) var machine: Machine = .current
+
+        private weak var surface: Ghostty.SurfaceView?
+        private var cancellables: Set<AnyCancellable> = []
+
+        func follow(_ surface: Ghostty.SurfaceView?) {
+            guard surface !== self.surface else { return }
+            self.surface = surface
+            cancellables = []
+            update()
+            guard let surface else { return }
+
+            // Starting or leaving ssh retitles the terminal, which is our cue
+            // to look at its foreground process again.
+            surface.$title
+                .removeDuplicates()
+                .debounce(for: .milliseconds(150), scheduler: RunLoop.main)
+                .sink { [weak self] _ in self?.update() }
+                .store(in: &cancellables)
+        }
+
+        private func update() {
+            let target = surface?.surfaceModel?.foregroundPID
+                .flatMap { SSHTarget.find(foregroundProcessGroup: $0) }
+            let machine = target.map(Machine.remote) ?? .current
+            if machine != self.machine { self.machine = machine }
+        }
+    }
+
+    /// A machine's name and model.
+    struct Machine: Equatable {
+        let name: String
+        let model: String
+        let symbol: String
+
+        /// A host the terminal is connected to over ssh.
+        static func remote(_ target: SSHTarget) -> Machine {
+            Machine(name: target.displayName, model: "SSH", symbol: "server.rack")
+        }
+
+        static let current: Machine = {
+            let name = Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+            let model = productName() ?? "Mac"
+            let symbol = switch model {
+            case _ where model.contains("MacBook"): "laptopcomputer"
+            case _ where model.contains("Mac mini"): "macmini"
+            case _ where model.contains("Mac Studio"): "macstudio"
+            case _ where model.contains("Mac Pro"): "macpro.gen3"
+            default: "desktopcomputer"
+            }
+            return Machine(name: name, model: model, symbol: symbol)
+        }()
+
+        /// The marketing name of this Mac without the details in parentheses,
+        /// e.g. "MacBook Air" for "MacBook Air (15-inch, M3, 2024)".
+        private static func productName() -> String? {
+            let entry = IORegistryEntryFromPath(kIOMainPortDefault, "IODeviceTree:/product")
+            guard entry != MACH_PORT_NULL else { return nil }
+            defer { IOObjectRelease(entry) }
+            guard let data = IORegistryEntryCreateCFProperty(
+                entry, "product-name" as CFString, kCFAllocatorDefault, 0
+            )?.takeRetainedValue() as? Data else { return nil }
+            let full = String(decoding: data.prefix { $0 != 0 }, as: UTF8.self)
+            let name = full.split(separator: "(").first.map { $0.trimmingCharacters(in: .whitespaces) }
+            return name?.isEmpty == false ? name : nil
+        }
+    }
 }
 
 extension TitlebarTabsTahoeTerminalWindow {

@@ -352,7 +352,7 @@ extension Ghostty {
         }
 
         var macosTitlebarStyle: MacOSTitlebarStyle {
-            let defaultValue = MacOSTitlebarStyle.transparent
+            let defaultValue = MacOSTitlebarStyle.tabs
             guard let config = self.config else { return defaultValue }
             var v: UnsafePointer<Int8>?
             let key = "macos-titlebar-style"
@@ -753,17 +753,18 @@ extension Ghostty.Config {
             switch value {
             case 0:
                 self = .disabled
+            // Glass needs macOS 26. Before that, a plain blur looks closest.
             case -1:
                 if #available(macOS 26.0, *) {
                     self = .macosGlassRegular
                 } else {
-                    self = .disabled
+                    self = .radius(20)
                 }
             case -2:
                 if #available(macOS 26.0, *) {
                     self = .macosGlassClear
                 } else {
-                    self = .disabled
+                    self = .radius(20)
                 }
             default:
                 self = .radius(Int(value))

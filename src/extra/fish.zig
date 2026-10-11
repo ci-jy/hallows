@@ -49,8 +49,6 @@ fn writeCompletions(writer: *std.Io.Writer) !void {
         try writer.writeAll(if (field.type != bool) " -r" else " ");
         if (std.mem.startsWith(u8, field.name, "font-family"))
             try writer.writeAll(" -f  -a \"(hallows +list-fonts | grep '^[A-Z]')\"")
-        else if (std.mem.eql(u8, "theme", field.name))
-            try writer.writeAll(" -f -a \"(hallows +list-themes | sed -E 's/^(.*) \\(.*\\$/\\1/')\"")
         else if (std.mem.eql(u8, "working-directory", field.name))
             try writer.writeAll(" -f -k -a \"(__fish_complete_directories)\"")
         else {

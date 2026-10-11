@@ -15,14 +15,19 @@ pub fn init(
     deps: *const SharedDeps,
     target: Target,
 ) !GhosttyXCFramework {
-    // Universal macOS build
-    const macos_universal = try GhosttyLib.initMacOSUniversal(b, deps);
-
-    // Native macOS build
-    const macos_native = try GhosttyLib.initStatic(b, &try deps.retarget(
-        b,
-        Config.genericMacOSTarget(b, null),
-    ));
+    // Only build the macOS library variant we actually need so that,
+    // for example, an arm64 build never compiles the x86_64 slice.
+    const macos_lib: GhosttyLib = switch (target) {
+        .universal => try GhosttyLib.initMacOSUniversal(b, deps),
+        .arm64 => try GhosttyLib.initStatic(b, &try deps.retarget(
+            b,
+            Config.genericMacOSTarget(b, .aarch64),
+        )),
+        .native => try GhosttyLib.initStatic(b, &try deps.retarget(
+            b,
+            Config.genericMacOSTarget(b, null),
+        )),
+    };
 
     // Generate a headers directory with only ghostty.h and the module
     // map. We can't use include/ directly because it also contains the
@@ -39,21 +44,11 @@ pub fn init(
     const xcframework = XCFrameworkStep.create(b, .{
         .name = "GhosttyKit",
         .out_path = "macos/GhosttyKit.xcframework",
-        .libraries = switch (target) {
-            .universal => &.{
-                .{
-                    .library = macos_universal.output,
-                    .headers = headers,
-                    .dsym = macos_universal.dsym,
-                },
-            },
-
-            .native => &.{.{
-                .library = macos_native.output,
-                .headers = headers,
-                .dsym = macos_native.dsym,
-            }},
-        },
+        .libraries = &.{.{
+            .library = macos_lib.output,
+            .headers = headers,
+            .dsym = macos_lib.dsym,
+        }},
     });
 
     return .{

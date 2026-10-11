@@ -60,12 +60,6 @@ fn writeBashCompletions(writer: *std.Io.Writer) !void {
         \\    while read -r line; do COMPREPLY+=("$line"); done < <( compgen -P '"' -S '"' -W "$($hallows +list-fonts | grep '^[A-Z]' )" -- "$cur")
         \\  }
         \\
-        \\  _themes() {
-        \\    local IFS=$'\n'
-        \\    COMPREPLY=()
-        \\    while read -r line; do COMPREPLY+=("$line"); done < <( compgen -P '"' -S '"' -W "$($hallows +list-themes | sed -E 's/^(.*) \(.*$/\1/')" -- "$cur")
-        \\  }
-        \\
         \\  _files() {
         \\    _compreply compgen -o filenames -f -- "$cur"
         \\    for i in "${!COMPREPLY[@]}"; do
@@ -116,8 +110,6 @@ fn writeBashCompletions(writer: *std.Io.Writer) !void {
 
         if (std.mem.startsWith(u8, field.name, "font-family"))
             try writer.writeAll("_fonts ;;")
-        else if (std.mem.eql(u8, "theme", field.name))
-            try writer.writeAll("_themes ;;")
         else if (std.mem.eql(u8, "working-directory", field.name))
             try writer.writeAll("_dirs ;;")
         else if (field.type == Config.RepeatablePath)

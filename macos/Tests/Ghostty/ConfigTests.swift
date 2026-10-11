@@ -90,20 +90,15 @@ struct ConfigTests {
 
     // MARK: - Enum Properties
 
-    @Test func macosTitlebarStyleDefaultsToTransparent() throws {
+    @Test func macosTitlebarStyleDefaultsToTabs() throws {
         let config = try TemporaryConfig("")
-        #expect(config.macosTitlebarStyle == .transparent)
+        #expect(config.macosTitlebarStyle == .tabs)
     }
 
-    @Test(arguments: [
-        ("native", Ghostty.Config.MacOSTitlebarStyle.native),
-        ("transparent", Ghostty.Config.MacOSTitlebarStyle.transparent),
-        ("tabs", Ghostty.Config.MacOSTitlebarStyle.tabs),
-        ("hidden", Ghostty.Config.MacOSTitlebarStyle.hidden),
-    ])
-    func macosTitlebarStyleValues(raw: String, expected: Ghostty.Config.MacOSTitlebarStyle) throws {
+    @Test(arguments: ["native", "transparent", "tabs", "hidden"])
+    func macosTitlebarStyleIsFixed(raw: String) throws {
         let config = try TemporaryConfig("macos-titlebar-style = \(raw)")
-        #expect(config.macosTitlebarStyle == expected)
+        #expect(config.macosTitlebarStyle == .tabs)
     }
 
     @Test func resizeOverlayDefaultsToAfterFirst() throws {
@@ -153,14 +148,14 @@ struct ConfigTests {
 
     // MARK: - Numeric Properties
 
-    @Test func backgroundOpacityDefaultsToOne() throws {
+    @Test func backgroundOpacityDefaultsToTranslucent() throws {
         let config = try TemporaryConfig("")
-        #expect(config.backgroundOpacity == 1.0)
+        #expect(config.backgroundOpacity == 0.6)
     }
 
-    @Test func backgroundOpacitySetToCustom() throws {
+    @Test func backgroundOpacityIsFixed() throws {
         let config = try TemporaryConfig("background-opacity = 0.5")
-        #expect(config.backgroundOpacity == 0.5)
+        #expect(config.backgroundOpacity == 0.6)
     }
 
     @Test func windowPositionDefaultsToNil() throws {
@@ -182,11 +177,11 @@ struct ConfigTests {
     }
 
     @Test func reloadConfig() throws {
-        let config = try TemporaryConfig("background-opacity = 0.5")
-        #expect(config.backgroundOpacity == 0.5)
+        let config = try TemporaryConfig("window-position-x = 10")
+        #expect(config.windowPositionX == 10)
 
-        try config.reload("background-opacity = 0.7")
-        #expect(config.backgroundOpacity == 0.7)
+        try config.reload("window-position-x = 20")
+        #expect(config.windowPositionX == 20)
     }
 
     @Test func defaultConfigIsLoaded() throws {

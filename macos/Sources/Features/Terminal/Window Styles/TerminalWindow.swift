@@ -518,6 +518,9 @@ class TerminalWindow: NSWindow {
     }
 
     /// This is called by the controller when there is a need to reset the window appearance.
+    /// Called when the window's focused terminal changes.
+    func focusedSurfaceDidChange(_ surface: Ghostty.SurfaceView?) {}
+
     func syncAppearance(_ surfaceConfig: Ghostty.SurfaceView.DerivedConfig) {
         // If our window is not visible, then we do nothing. Some things such as blurring
         // have no effect if the window is not visible. Ultimately, we'll have this called
@@ -554,8 +557,9 @@ class TerminalWindow: NSWindow {
         } else {
             isOpaque = true
 
+            // The window shows between the terminal panes, so it gets the chrome shade.
             let backgroundColor = preferredBackgroundColor ?? NSColor(surfaceConfig.backgroundColor)
-            self.backgroundColor = backgroundColor.withAlphaComponent(1)
+            self.backgroundColor = backgroundColor.paneChromeColor.withAlphaComponent(1)
         }
     }
 
@@ -566,18 +570,8 @@ class TerminalWindow: NSWindow {
     /// change the alpha channel again manually.
     var preferredBackgroundColor: NSColor? {
         if let terminalController, !terminalController.surfaceTree.isEmpty {
-            let surface: Ghostty.SurfaceView?
-
-            // If our focused surface borders the top then we prefer its background color
-            if let focusedSurface = terminalController.focusedSurface,
-               let treeRoot = terminalController.surfaceTree.root,
-               let focusedNode = treeRoot.node(view: focusedSurface),
-               treeRoot.spatial().doesBorder(side: .up, from: focusedNode) {
-                surface = focusedSurface
-            } else {
-                // If it doesn't border the top, we use the top-left leaf
-                surface = terminalController.surfaceTree.root?.leftmostLeaf()
-            }
+            let surface = terminalController.surfaceTree.backgroundSurface(
+                focused: terminalController.focusedSurface)
 
             if let surface {
                 let backgroundColor = surface.backgroundColor ?? surface.derivedConfig.backgroundColor

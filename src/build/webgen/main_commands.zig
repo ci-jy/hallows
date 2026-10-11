@@ -21,7 +21,7 @@ pub fn genActions(writer: *std.Io.Writer) !void {
         \\editOnGithubLink: https://github.com/ghostty-org/ghostty/tree/main/src/cli
         \\---
         \\Ghostty includes a number of utility actions that can be accessed as subcommands.
-        \\Actions provide utilities to work with config, list keybinds, list fonts, demo themes,
+        \\Actions provide utilities to work with config, list keybinds, list fonts,
         \\and debug.
         \\
     );

@@ -35,9 +35,11 @@ pub fn init(
     };
 
     const xc_arch: ?[]const u8 = switch (deps.xcframework.target) {
-        // Universal is our default target, so we don't have to
-        // add anything.
+        // Universal builds every architecture the Xcode project lists.
         .universal => null,
+
+        // Apple Silicon only.
+        .arm64 => "arm64",
 
         // Native we need to override the architecture in the Xcode
         // project with the -arch flag.

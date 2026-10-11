@@ -255,7 +255,8 @@ extension TerminalViewContainer {
             default:
                 return nil
             }
-            self.backgroundColor = preferredBackgroundColor ?? NSColor(config.backgroundColor)
+            // The glass is the window around the panes, so it's tinted with the chrome shade.
+            self.backgroundColor = (preferredBackgroundColor ?? NSColor(config.backgroundColor)).paneChromeColor
             self.backgroundOpacity = config.backgroundOpacity
             self.cornerRadius = cornerRadius
         }

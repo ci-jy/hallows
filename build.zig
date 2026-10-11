@@ -87,7 +87,7 @@ pub fn build(b: *std.Build) !void {
         "Update translation files",
     );
 
-    // Ghostty resources like terminfo, shell integration, themes, etc.
+    // Ghostty resources like terminfo, shell integration, etc.
     const resources = try buildpkg.GhosttyResources.init(b, &config, &deps);
     const i18n = if (config.i18n) try buildpkg.GhosttyI18n.init(b, &config) else null;
 

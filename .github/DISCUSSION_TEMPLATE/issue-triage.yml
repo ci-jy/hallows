@@ -125,7 +125,6 @@ body:
         font-feature = +cv07
         font-size = 16
         font-thicken = true
-        theme = catppuccin-mocha
       render: ini
     validations:
       required: true

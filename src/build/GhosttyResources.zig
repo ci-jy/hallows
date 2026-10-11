@@ -132,19 +132,6 @@ pub fn init(b: *std.Build, cfg: *const Config, deps: *const SharedDeps) !Ghostty
         try steps.append(b.allocator, &install_step.step);
     }
 
-    // Themes
-    if (cfg.emit_themes) {
-        if (b.lazyDependency("iterm2_themes", .{})) |upstream| {
-            const install_step = b.addInstallDirectory(.{
-                .source_dir = upstream.path(""),
-                .install_dir = .{ .custom = "share" },
-                .install_subdir = b.pathJoin(&.{ "hallows", "themes" }),
-                .exclude_extensions = &.{".md"},
-            });
-            try steps.append(b.allocator, &install_step.step);
-        }
-    }
-
     // Fish shell completions
     {
         const run = b.addRunArtifact(build_data_exe);

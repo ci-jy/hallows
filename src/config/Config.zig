@@ -27,7 +27,6 @@ const conditional = @import("conditional.zig");
 const Conditional = conditional.Conditional;
 const file_load = @import("file_load.zig");
 const formatterpkg = @import("formatter.zig");
-const themepkg = @import("theme.zig");
 const url = @import("url.zig");
 pub const Key = @import("key.zig").Key;
 const MetricModifier = fontpkg.Metrics.Modifier;
@@ -545,173 +544,58 @@ language: ?[:0]const u8 = null,
 /// Example: `hinting`, `no-hinting`, `force-autohint`, `no-force-autohint`
 @"freetype-load-flags": FreetypeLoadFlags = .{},
 
-/// A theme to use. This can be a built-in theme name, a custom theme
-/// name, or an absolute path to a custom theme file. Hallows also supports
-/// specifying a different theme to use for light and dark mode. Each
-/// option is documented below.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// If the theme is an absolute pathname, Hallows will attempt to load that
-/// file as a theme. If that file does not exist or is inaccessible, an error
-/// will be logged and no other directories will be searched.
-///
-/// If the theme is not an absolute pathname, two different directories will be
-/// searched for a file name that matches the theme. This is case sensitive on
-/// systems with case-sensitive filesystems. It is an error for a theme name to
-/// include path separators unless it is an absolute pathname.
-///
-/// The first directory is the `themes` subdirectory of your Hallows
-/// configuration directory. This is `$XDG_CONFIG_HOME/ghostty/themes` or
-/// `~/.config/ghostty/themes`.
-///
-/// The second directory is the `themes` subdirectory of the Hallows resources
-/// directory. Hallows ships with a multitude of themes that will be installed
-/// into this directory. On macOS, this list is in the
-/// `Hallows.app/Contents/Resources/ghostty/themes` directory. On Linux, this
-/// list is in the `share/ghostty/themes` directory (wherever you installed the
-/// Hallows "share" directory.
-///
-/// To see a list of available themes, run `hallows +list-themes`.
-///
-/// A theme file is simply another Hallows configuration file. They share
-/// the same syntax and same configuration options. A theme can set any valid
-/// configuration option so please do not use a theme file from an untrusted
-/// source. The built-in themes are audited to only set safe configuration
-/// options.
-///
-/// Some options cannot be set within theme files. The reason these are not
-/// supported should be self-evident. A theme file cannot set `theme` or
-/// `config-file`. At the time of writing this, Hallows will not show any
-/// warnings or errors if you set these options in a theme file but they will
-/// be silently ignored.
-///
-/// Any additional colors specified via background, foreground, palette, etc.
-/// will override the colors specified in the theme.
-///
-/// To specify a different theme for light and dark mode, use the following
-/// syntax: `light:theme-name,dark:theme-name`. For example:
-/// `light:Rose Pine Dawn,dark:Rose Pine`. Whitespace around all values are
-/// trimmed and order of light and dark does not matter. Both light and dark
-/// must be specified in this form. In this form, the theme used will be
-/// based on the current desktop environment theme.
-///
-/// There are some known bugs with light/dark mode theming. These will
-/// be fixed in a future update:
-///
-///   - macOS: titlebar tabs style is not updated when switching themes.
-theme: ?Theme = null,
+/// Background color for the window, fixed at `#2D2625` (a warm dark brown).
+background: Color = .{ .r = 0x2D, .g = 0x26, .b = 0x25 },
 
-/// Background color for the window.
-/// Specified as either hex (`#RRGGBB` or `RRGGBB`) or a named X11 color.
-background: Color = .{ .r = 0x28, .g = 0x2C, .b = 0x34 },
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
+///
+/// Foreground color for the window, fixed at `#EEF3F7` (a cool white).
+foreground: Color = .{ .r = 0xEE, .g = 0xF3, .b = 0xF7 },
 
-/// Foreground color for the window.
-/// Specified as either hex (`#RRGGBB` or `RRGGBB`) or a named X11 color.
-foreground: Color = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF },
-
-/// Background image for the terminal.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// This should be a path to a PNG or JPEG file, other image formats are
-/// not yet supported.
-///
-/// The background image is currently per-terminal, not per-window. If
-/// you are a heavy split user, the background image will be repeated across
-/// splits. A future improvement to Hallows will address this.
-///
-/// WARNING: Background images are currently duplicated in VRAM per-terminal.
-/// For sufficiently large images, this could lead to a large increase in
-/// memory usage (specifically VRAM usage). A future Hallows improvement
-/// will resolve this by sharing image textures across terminals.
-///
-/// Available since: 1.2.0
+/// Background image for the terminal. Hallows has no background image.
 @"background-image": ?Path = null,
 
-/// Background image opacity.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// This is relative to the value of `background-opacity`.
-///
-/// A value of `1.0` (the default) will result in the background image being
-/// placed on top of the general background color, and then the combined result
-/// will be adjusted to the opacity specified by `background-opacity`.
-///
-/// A value less than `1.0` will result in the background image being mixed
-/// with the general background color before the combined result is adjusted
-/// to the configured `background-opacity`.
-///
-/// A value greater than `1.0` will result in the background image having a
-/// higher opacity than the general background color. For instance, if the
-/// configured `background-opacity` is `0.5` and `background-image-opacity`
-/// is set to `1.5`, then the final opacity of the background image will be
-/// `0.5 * 1.5 = 0.75`.
-///
-/// Available since: 1.2.0
+/// Background image opacity, fixed at `1.0`. Unused since Hallows has no
+/// background image.
 @"background-image-opacity": f32 = 1.0,
 
-/// Background image position.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// Valid values are:
-///   * `top-left`
-///   * `top-center`
-///   * `top-right`
-///   * `center-left`
-///   * `center`
-///   * `center-right`
-///   * `bottom-left`
-///   * `bottom-center`
-///   * `bottom-right`
-///
-/// The default value is `center`.
-///
-/// Available since: 1.2.0
+/// Background image position, fixed at `center`. Unused since Hallows has
+/// no background image.
 @"background-image-position": BackgroundImagePosition = .center,
 
-/// Background image fit.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// Valid values are:
-///
-///  * `contain`
-///
-///    Preserving the aspect ratio, scale the background image to the largest
-///    size that can still be contained within the terminal, so that the whole
-///    image is visible.
-///
-///  * `cover`
-///
-///    Preserving the aspect ratio, scale the background image to the smallest
-///    size that can completely cover the terminal. This may result in one or
-///    more edges of the image being clipped by the edge of the terminal.
-///
-///  * `stretch`
-///
-///    Stretch the background image to the full size of the terminal, without
-///    preserving the aspect ratio.
-///
-///  * `none`
-///
-///    Don't scale the background image.
-///
-/// The default value is `contain`.
-///
-/// Available since: 1.2.0
+/// Background image fit, fixed at `contain`. Unused since Hallows has no
+/// background image.
 @"background-image-fit": BackgroundImageFit = .contain,
 
-/// Whether to repeat the background image or not.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// If this is set to true, the background image will be repeated if there
-/// would otherwise be blank space around it because it doesn't completely
-/// fill the terminal area.
-///
-/// The default value is `false`.
-///
-/// Available since: 1.2.0
+/// Whether to repeat the background image, fixed at `false`. Unused since
+/// Hallows has no background image.
 @"background-image-repeat": bool = false,
 
-/// The foreground and background color for selection. If this is not set, then
-/// the selection color is just the inverted window background and foreground
-/// (note: not to be confused with the cell bg/fg).
-/// Specified as either hex (`#RRGGBB` or `RRGGBB`) or a named X11 color.
-/// Since version 1.2.0, this can also be set to `cell-foreground` to match
-/// the cell foreground color, or `cell-background` to match the cell
-/// background color.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
+///
+/// The foreground and background color for selection. Both are fixed to
+/// unset, so the selection is the inverted window background and foreground.
+/// This applies to both `selection-foreground` and `selection-background`.
 @"selection-foreground": ?TerminalColor = null,
 @"selection-background": ?TerminalColor = null,
 
@@ -770,99 +654,51 @@ foreground: Color = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF },
 /// Available since: 1.3.0
 @"selection-word-chars": SelectionWordChars = .{},
 
-/// The minimum contrast ratio between the foreground and background colors.
-/// The contrast ratio is a value between 1 and 21. A value of 1 allows for no
-/// contrast (e.g. black on black). This value is the contrast ratio as defined
-/// by the [WCAG 2.0 specification](https://www.w3.org/TR/WCAG20/).
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// If you want to avoid invisible text (same color as background), a value of
-/// 1.1 is a good value. If you want to avoid text that is difficult to read, a
-/// value of 3 or higher is a good value. The higher the value, the more likely
-/// that text will become black or white.
-///
-/// This value does not apply to Emoji or images.
+/// The minimum contrast ratio between the foreground and background colors
+/// (a WCAG 2.0 contrast ratio from 1 to 21). Fixed at `1`, no adjustment.
 @"minimum-contrast": f64 = 1,
 
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
+///
 /// Color palette for the 256 color form that many terminal applications use.
-/// The syntax of this configuration is `N=COLOR` where `N` is 0 to 255 (for
-/// the 256 colors in the terminal color table) and `COLOR` is a typical RGB
-/// color code such as `#AABBCC` or `AABBCC`, or a named X11 color. For example,
-/// `palette = 5=#BB78D9` will set the 'purple' color.
 ///
-/// The palette index can be in decimal, binary, octal, or hexadecimal.
-/// Decimal is assumed unless a prefix is used: `0b` for binary, `0o` for octal,
-/// and `0x` for hexadecimal.
-///
-/// For definitions on the color indices and what they canonically map to,
-/// [see this cheat sheet](https://www.ditig.com/256-colors-cheat-sheet).
-///
-/// For most themes, you only need to set the first 16 colors (0–15) since the
-/// rest of the palette (16–255) will be automatically generated by
-/// default (see `palette-generate` for more details).
-palette: Palette = .{},
+/// The first 16 colors are fixed to the Hallows palette, made for the
+/// background: salmon red, green, amber, blue, lavender and cyan, with
+/// brighter variants. The rest are the standard xterm colors. Running
+/// programs can still change palette colors with escape sequences (OSC 4).
+palette: Palette = .{ .value = Palette.hallows },
 
-/// Whether to automatically generate the extended 256 color palette
-/// (indices 16–255) from the base 16 ANSI colors.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// This lets theme authors specify only the base 16 colors and have the
-/// rest of the palette be automatically generated in a consistent and
-/// aesthetic way.
-///
-/// When enabled, the 6×6×6 color cube and 24-step grayscale ramp are
-/// derived from interpolations of the base palette, giving a more cohesive
-/// look. Colors that have been explicitly set via `palette` are never
-/// overwritten.
-///
-/// The default value is false (disabled), because many legacy programs
-/// using the 256-color palette hardcode assumptions about what these
-/// colors are (mostly assuming the xterm 256 color palette). However, this
-/// is still a very useful tool for theme authors and users who want
-/// to customize their palette without having to specify all 256 colors.
-///
-/// For more information on how the generation works, see here:
-/// https://gist.github.com/jake-stewart/0a8ea46159a7da2c808e5be2177e1783
-///
-/// Available since: 1.3.0
+/// Whether to generate the extended 256 color palette (indices 16–255) from
+/// the base 16 colors. Fixed at `false`, because many programs assume the
+/// standard xterm 256 color palette.
 @"palette-generate": bool = false,
 
-/// Invert the palette colors generated when `palette-generate` is enabled,
-/// so that the colors go in reverse order. This allows palette-based
-/// applications to work well in both light and dark mode since the
-/// palettes are always relatively good colors.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// This defaults to off because some legacy terminal applications
-/// hardcode the assumption that palette indices 16–231 are ordered from
-/// darkest to lightest, so enabling this would make them unreadable.
-/// This is not a generally good assumption and we encourage modern
-/// terminal applications to use the indices in a more semantic way.
-///
-/// This has no effect if `palette-generate` is disabled.
-///
-/// For more information see `palette-generate`.
-///
-/// Available since: 1.3.0
+/// Invert the palette colors generated by `palette-generate`. Fixed at
+/// `false`; it has no effect since `palette-generate` is off.
 @"palette-harmonious": bool = false,
 
-/// The color of the cursor. If this is not set, a default will be chosen.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// Direct colors can be specified as either hex (`#RRGGBB` or `RRGGBB`)
-/// or a named X11 color.
-///
-/// Additionally, special values can be used to set the color to match
-/// other colors at runtime:
-///
-///   * `cell-foreground` - Match the cell foreground color.
-///     (Available since: 1.2.0)
-///
-///   * `cell-background` - Match the cell background color.
-///     (Available since: 1.2.0)
+/// The color of the cursor. Fixed to unset, which uses the default cursor
+/// color.
 @"cursor-color": ?TerminalColor = null,
 
-/// The opacity level (opposite of transparency) of the cursor. A value of 1
-/// is fully opaque and a value of 0 is fully transparent. A value less than 0
-/// or greater than 1 will be clamped to the nearest valid value. Note that a
-/// sufficiently small value such as 0.3 may be effectively invisible and may
-/// make it difficult to find the cursor.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
+///
+/// The opacity level (opposite of transparency) of the cursor, fixed at `1`
+/// (fully opaque).
 @"cursor-opacity": f64 = 1.0,
 
 /// The style of the cursor. This sets the default style. A running program can
@@ -901,12 +737,11 @@ palette: Palette = .{},
 ///   * `false`
 @"cursor-style-blink": ?bool = null,
 
-/// The color of the text under the cursor. If this is not set, a default will
-/// be chosen.
-/// Specified as either hex (`#RRGGBB` or `RRGGBB`) or a named X11 color.
-/// Since version 1.2.0, this can also be set to `cell-foreground` to match
-/// the cell foreground color, or `cell-background` to match the cell
-/// background color.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
+///
+/// The color of the text under the cursor. Fixed to unset, which uses the
+/// default.
 @"cursor-text": ?TerminalColor = null,
 
 /// Enables the ability to move the cursor at prompts by clicking on a
@@ -999,87 +834,49 @@ palette: Palette = .{},
 /// The default value is "3" for discrete devices and "1" for precision devices.
 @"mouse-scroll-multiplier": MouseScrollMultiplier = .default,
 
-/// The opacity level (opposite of transparency) of the background. A value of
-/// 1 is fully opaque and a value of 0 is fully transparent. A value less than 0
-/// or greater than 1 will be clamped to the nearest valid value.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
+///
+/// The opacity level (opposite of transparency) of the background, fixed at
+/// `0.6` so the panes show the glass they're made of (see `background-blur`).
 ///
 /// On macOS, background opacity is disabled when the terminal enters native
-/// fullscreen. This is because the background becomes gray and it can cause
-/// widgets to show through which isn't generally desirable.
-///
-/// On macOS, changing this configuration requires restarting Hallows completely.
-@"background-opacity": f64 = 1.0,
+/// fullscreen.
+@"background-opacity": f64 = 0.6,
 
-/// Applies background opacity to cells with an explicit background color
-/// set.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// Normally, `background-opacity` is only applied to the window background.
-/// If a cell has an explicit background color set, such as red, then that
-/// background color will be fully opaque. An effect of this is that some
-/// terminal applications that repaint the background color of the terminal
-/// such as a Neovim and Tmux may not respect the `background-opacity`
-/// (by design).
-///
-/// Setting this to `true` will apply the `background-opacity` to all cells
-/// regardless of whether they have an explicit background color set or not.
-///
-/// Available since: 1.2.0
+/// Whether to apply `background-opacity` to cells with an explicit
+/// background color set, fixed at `false`.
 @"background-opacity-cells": bool = false,
 
-/// Whether to blur the background when `background-opacity` is less than 1.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// Valid values are:
-///
-///   * a nonnegative integer specifying the *blur intensity*
-///   * `false`, equivalent to a blur intensity of 0
-///   * `true`, equivalent to the default blur intensity of 20, which is
-///     reasonable for a good looking blur. Higher blur intensities may
-///     cause strange rendering and performance issues.
-///
-/// On macOS 26.0 and later, there are additional special values that
-/// can be set to use the native macOS glass effects:
-///
-///   * `macos-glass-regular` - Standard glass effect with some opacity
-///   * `macos-glass-clear` - Highly transparent glass effect
-///
-/// If the macOS values are set, then this implies `background-blur = true`
-/// on non-macOS platforms.
-///
-/// On Linux, the exact blur intensity is ignored and any positive integer
-/// or `true` value will enable background blur. On Wayland, Hallows uses
-/// the [`ext-background-effect-v1`](https://wayland.app/protocols/ext-background-effect-v1)
-/// protocol to enable the blur effect, but this is not always supported
-/// on all compositors. Check the documentation of your compositor or
-/// desktop environment for blur support and how to configure it.
-///
-/// On X11, blur can only be enabled when using the KWin compositor
-/// as a part of KDE Plasma.
-@"background-blur": BackgroundBlur = .false,
+/// How to blur the translucent background, fixed at `true`, a standard blur
+/// (on Linux only where the compositor supports it). On macOS 26 and later,
+/// the terminal panes are Liquid Glass panels floating over this blur.
+@"background-blur": BackgroundBlur = .true,
 
-/// The opacity level (opposite of transparency) of an unfocused split.
-/// Unfocused splits by default are slightly faded out to make it easier to see
-/// which split is focused. To disable this feature, set this value to 1.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// A value of 1 is fully opaque and a value of 0 is fully transparent. Because
-/// "0" is not useful (it makes the window look very weird), the minimum value
-/// is 0.15. This value still looks weird but you can at least see what's going
-/// on. A value outside of the range 0.15 to 1 will be clamped to the nearest
-/// valid value.
-@"unfocused-split-opacity": f64 = 0.7,
+/// The opacity level of an unfocused split, fixed at `1` (no fading): the
+/// focused split is the one whose header shows its buttons.
+@"unfocused-split-opacity": f64 = 1,
 
-/// The color to dim the unfocused split. Unfocused splits are dimmed by
-/// rendering a semi-transparent rectangle over the split. This sets the color of
-/// that rectangle and can be used to carefully control the dimming effect.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// This will default to the background color.
-///
-/// Specified as either hex (`#RRGGBB` or `RRGGBB`) or a named X11 color.
+/// The color used to dim unfocused splits. Fixed to unset, which uses the
+/// background color.
 @"unfocused-split-fill": ?Color = null,
 
-/// The color of the split divider. If this is not set, a default will be chosen.
-/// Specified as either hex (`#RRGGBB` or `RRGGBB`) or a named X11 color.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// Available since: 1.1.0
+/// The color of the split divider. Fixed to unset, which uses the default.
 @"split-divider-color": ?Color = null,
 
 /// Control when Hallows preserves a zoomed split. Under normal circumstances,
@@ -2179,24 +1976,11 @@ keybind: Keybinds = .{},
 /// Available since: 1.1.0
 @"window-subtitle": WindowSubtitle = .false,
 
-/// The theme to use for the windows. Valid values:
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-///   * `auto` - Determine the theme based on the configured terminal
-///      background color. This has no effect if the "theme" configuration
-///      has separate light and dark themes. In that case, the behavior
-///      of "auto" is equivalent to "system".
-///   * `system` - Use the system theme.
-///   * `light` - Use the light theme regardless of system theme.
-///   * `dark` - Use the dark theme regardless of system theme.
-///   * `ghostty` - Use the background and foreground colors specified in the
-///     Hallows configuration. This is only supported on Linux builds.
-///
-/// On macOS, if `macos-titlebar-style` is `tabs` or `transparent`, the window theme will be
-/// automatically set based on the luminosity of the terminal background color.
-/// This only applies to terminal windows. This setting will still apply to
-/// non-terminal windows within Hallows.
-///
-/// This is currently only supported on macOS and Linux.
+/// The theme to use for the windows, fixed at `auto`: the window theme is
+/// determined from the background color, so Hallows windows are dark.
 @"window-theme": WindowTheme = .auto,
 
 /// The color space to use when interpreting terminal colors. "Terminal colors"
@@ -3427,47 +3211,12 @@ keybind: Keybinds = .{},
 /// Available since: 1.2.0
 @"macos-window-buttons": MacWindowButtons = .visible,
 
-/// The style of the macOS titlebar. Available values are: "native",
-/// "transparent", "tabs", and "hidden".
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// The "native" style uses the native macOS titlebar with zero customization.
-/// The titlebar will match your window theme (see `window-theme`).
-///
-/// The "transparent" style is the same as "native" but the titlebar will
-/// be transparent and allow your window background color to come through.
-/// This makes a more seamless window appearance but looks a little less
-/// typical for a macOS application and may not work well with all themes.
-///
-/// The "transparent" style will also update in real-time to dynamic
-/// changes to the window background color, e.g. via OSC 11. To make this
-/// more aesthetically pleasing, this only happens if the terminal is
-/// a window, tab, or split that borders the top of the window. This
-/// avoids a disjointed appearance where the titlebar color changes
-/// but all the topmost terminals don't match.
-///
-/// The "tabs" style is a completely custom titlebar that integrates the
-/// tab bar into the titlebar. This titlebar always matches the background
-/// color of the terminal. There are some limitations to this style:
-/// On macOS 13 and below, saved window state will not restore tabs correctly.
-/// macOS 14 does not have this issue and any other macOS version has not
-/// been tested.
-///
-/// The "hidden" style hides the titlebar. Unlike `window-decoration = none`,
-/// however, it does not remove the frame from the window or cause it to have
-/// squared corners. Changing to or from this option at run-time may affect
-/// existing windows in buggy ways.
-///
-/// When "hidden", the top titlebar area can no longer be used for dragging
-/// the window. To drag the window, you can use option+click on the resizable
-/// areas of the frame to drag the window. This is a standard macOS behavior
-/// and not something Hallows enables.
-///
-/// The default value is "transparent". This is an opinionated choice
-/// but its one I think is the most aesthetically pleasing and works in
-/// most cases.
-///
-/// Changing this option at runtime only applies to new windows.
-@"macos-titlebar-style": MacTitlebarStyle = .transparent,
+/// The style of the macOS titlebar, fixed at `tabs`: a custom titlebar that
+/// holds the tab bar above the terminal panes and matches the background.
+@"macos-titlebar-style": MacTitlebarStyle = .tabs,
 
 /// Whether the proxy icon in the macOS titlebar is visible. The proxy icon
 /// is the icon that represents the folder of the current working directory.
@@ -3935,30 +3684,19 @@ else
 /// Available since: 1.4.0
 @"program-status-notify": ProgramStatusNotify = .unfocused,
 
-/// Modifies the color used for bold text in the terminal.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// This can be set to a specific color, using the same format as
-/// `background` or `foreground` (e.g. `#RRGGBB` but other formats
-/// are also supported; see the aforementioned documentation). If a
-/// specific color is set, this color will always be used for the default
-/// bold text color. It will set the rest of the bold colors to `bright`.
-///
-/// This can also be set to `bright`, which uses the bright color palette
-/// for bold text. For example, if the text is red, then the bold will
-/// use the bright red color. The terminal palette is set with `palette`
-/// but can also be overridden by the terminal application itself using
-/// escape sequences such as OSC 4. (Since Hallows 1.2.0, the previous
-/// configuration `bold-is-bright` is deprecated and replaced by this
-/// usage).
-///
-/// Available since Hallows 1.2.0.
+/// Modifies the color used for bold text in the terminal. Fixed to unset, so
+/// bold text uses the regular text color. (The deprecated `bold-is-bright`
+/// option sets this, so it is ignored too.)
 @"bold-color": ?BoldColor = null,
 
-/// The opacity level (opposite of transparency) of the faint text. A value of
-/// 1 is fully opaque and a value of 0 is fully transparent. A value less than 0
-/// or greater than 1 will be clamped to the nearest valid value.
+/// Fixed in Hallows: this can't be changed because Hallows has one
+/// fixed look. Setting it shows a configuration warning and is ignored.
 ///
-/// Available since Hallows 1.2.0.
+/// The opacity level (opposite of transparency) of faint text, fixed at
+/// `0.5`.
 @"faint-opacity": f64 = 0.5,
 
 /// This will be used to set the `TERM` environment variable.
@@ -4066,8 +3804,8 @@ _conditional_state: conditional.State = .{},
 _conditional_set: std.EnumSet(conditional.Key) = .{},
 
 /// The steps we can use to reload the configuration after it has been loaded
-/// without reopening the files. This is used in very specific cases such
-/// as loadTheme which has more details on why.
+/// without reopening the files. This is used by changeConditionalState
+/// to rebuild the configuration for a new conditional state.
 _replay_steps: std.ArrayList(Replay.Step) = .empty,
 
 /// Set to true if Hallows was executed as xdg-terminal-exec on Linux.
@@ -4379,7 +4117,8 @@ pub fn loadCliArgs(self: *Config, alloc_gpa: Allocator) !void {
 
             // First, we add an artificial "-e" so that if we
             // replay the inputs to rebuild the config (i.e. if
-            // a theme is set) then we will get the same behavior.
+            // the conditional state changes) then we will get the
+            // same behavior.
             try self._replay_steps.append(arena_alloc, .@"-e");
 
             // Next, take all remaining args and use that to build up
@@ -4686,100 +4425,63 @@ fn expandHome(path: []const u8, buf: []u8) []const u8 {
     };
 }
 
-fn loadTheme(self: *Config, theme: Theme) !void {
-    // Load the correct theme depending on the conditional state.
-    // Dark/light themes were programmed prior to conditional configuration
-    // so when we introduce that we probably want to replace this.
-    const name: []const u8 = switch (self._conditional_state.theme) {
-        .light => theme.light,
-        .dark => theme.dark,
-    };
+/// The appearance options that are fixed in Hallows. Hallows has one look
+/// that users can't change, but the fields stay because a lot of code reads
+/// them. `finalize` resets each of these to its default value and adds a
+/// diagnostic if it was set to anything else.
+pub const locked_keys = [_]Key{
+    .background,
+    .foreground,
+    .palette,
+    .@"palette-generate",
+    .@"palette-harmonious",
+    .@"selection-foreground",
+    .@"selection-background",
+    .@"cursor-color",
+    .@"cursor-text",
+    .@"cursor-opacity",
+    .@"bold-color",
+    .@"faint-opacity",
+    .@"minimum-contrast",
+    .@"background-opacity",
+    .@"background-opacity-cells",
+    .@"background-blur",
+    .@"background-image",
+    .@"background-image-opacity",
+    .@"background-image-position",
+    .@"background-image-fit",
+    .@"background-image-repeat",
+    .@"unfocused-split-opacity",
+    .@"unfocused-split-fill",
+    .@"split-divider-color",
+    .@"window-theme",
+    .@"macos-titlebar-style",
+};
 
-    // Find our theme file and open it. See the open function for details.
-    const themefile = (try themepkg.open(
-        self._arena.?.allocator(),
-        name,
-        &self._diagnostics,
-    )) orelse return;
-    const path = themefile.path;
-    const file = themefile.file;
-    defer file.close(global.io());
+/// Reset every locked option (see `locked_keys`) to its default value,
+/// adding a diagnostic for each one that was set to something else.
+/// Calling this again is a no-op since the values are then the defaults.
+fn resetLockedKeys(self: *Config) Allocator.Error!void {
+    inline for (locked_keys) |key| {
+        const name = @tagName(key);
+        const info = comptime info: {
+            @setEvalBranchQuota(100_000);
+            for (@typeInfo(Config).@"struct".fields) |field| {
+                if (std.mem.eql(u8, field.name, name)) break :info field;
+            }
+            unreachable;
+        };
+        const default_value: info.type = comptime info.defaultValue() orelse
+            @compileError("locked config field has no default: " ++ name);
 
-    // From this point onwards, we load the theme and do a bit of a dance
-    // to achieve two separate goals:
-    //
-    //   (1) We want the theme to be loaded and our existing config to
-    //       override the theme. So we need to load the theme and apply
-    //       our config on top of it.
-    //
-    //   (2) We want to free existing memory that we aren't using anymore
-    //       as a result of reloading the configuration.
-    //
-    // Point 2 is strictly a result of aur approach to point 1, but it is
-    // a nice property to have to limit memory bloat as much as possible.
-
-    // Load into a new configuration so that we can free the existing memory.
-    const alloc_gpa = self._arena.?.child_allocator;
-    var new_config = try self.cloneEmpty(alloc_gpa);
-    errdefer new_config.deinit();
-
-    // Load our theme
-    var buf: [2048]u8 = undefined;
-    var file_reader = file.reader(global.io(), &buf);
-    const reader = &file_reader.interface;
-    var iter: cli.args.LineIterator = .{ .r = reader, .filepath = path };
-    try new_config.loadIter(alloc_gpa, &iter);
-
-    // Setup our replay to be conditional.
-    conditional: for (new_config._replay_steps.items) |*item| {
-        switch (item.*) {
-            .expand, .diagnostic => {},
-
-            // If we see "-e" then we do NOT make the following arguments
-            // conditional since they are supposed to be part of the
-            // initial command.
-            .@"-e" => break :conditional,
-
-            // Change our arg to be conditional on our theme.
-            .arg => |v| {
-                const alloc_arena = new_config._arena.?.allocator();
-                const conds = try alloc_arena.alloc(Conditional, 1);
-                conds[0] = .{
-                    .key = .theme,
-                    .op = .eq,
-                    .value = @tagName(self._conditional_state.theme),
-                };
-                item.* = .{ .conditional_arg = .{
-                    .conditions = conds,
-                    .arg = v,
-                } };
-            },
-
-            .conditional_arg => |v| {
-                const alloc_arena = new_config._arena.?.allocator();
-                const conds = try alloc_arena.alloc(Conditional, v.conditions.len + 1);
-                conds[0] = .{
-                    .key = .theme,
-                    .op = .eq,
-                    .value = @tagName(self._conditional_state.theme),
-                };
-                @memcpy(conds[1..], v.conditions);
-                item.* = .{ .conditional_arg = .{
-                    .conditions = conds,
-                    .arg = v.arg,
-                } };
-            },
+        if (!deepEqual(info.type, @field(self, name), default_value)) {
+            @field(self, name) = default_value;
+            try self.addDiagnosticFmt(
+                "{s} can't be changed: Hallows has a fixed look",
+                .{name},
+            );
         }
     }
-
-    // Replay our previous inputs so that we can override values
-    // from the theme.
-    var slice_it = Replay.iterator(self._replay_steps.items, &new_config);
-    try new_config.loadIter(alloc_gpa, &slice_it);
-
-    // Success, swap our new config in and free the old.
-    self.deinit();
-    self.* = new_config;
 }
 
 /// Call this once after you are done setting configuration. This
@@ -4787,27 +4489,9 @@ fn loadTheme(self: *Config, theme: Theme) !void {
 pub fn finalize(self: *Config) !void {
     const alloc = self._arena.?.allocator();
 
-    // We always load the theme first because it may set other fields
-    // in our config.
-    if (self.theme) |*theme| {
-        try theme.finalize(alloc);
-        const different = !std.mem.eql(u8, theme.light, theme.dark);
-
-        // Warning: loadTheme will deinit our existing config and replace
-        // it so all memory from self prior to this point will be freed.
-        try self.loadTheme(theme.*);
-
-        // If we have different light vs dark mode themes, disable
-        // window-theme = auto since that breaks it.
-        if (different) {
-            // This setting doesn't make sense with different light/dark themes
-            // because it'll force the theme based on the Ghostty theme.
-            if (self.@"window-theme" == .auto) self.@"window-theme" = .system;
-
-            // Mark that we use a conditional theme
-            self._conditional_set.insert(.theme);
-        }
-    }
+    // Hallows has a fixed look: undo any changes to the appearance
+    // options before anything below derives values from them.
+    try self.resetLockedKeys();
 
     // Used for a variety of defaults. See the function docs as well the
     // specific variable use sites for more details.
@@ -5003,7 +4687,7 @@ pub fn parseManuallyHook(
     if (std.mem.eql(u8, arg, "-e")) {
         // Add the special -e marker. This prevents:
         // (1) config-file from adding args to the end (see #2908)
-        // (2) dark/light theme from making this conditional
+        // (2) conditional replays from making this conditional
         try self._replay_steps.append(alloc, .@"-e");
 
         // Build up the command. We don't clean this up because we take
@@ -5419,7 +5103,7 @@ fn probableCliEnvironment() bool {
     return false;
 }
 
-/// This is used to "replay" the configuration. See loadTheme for details.
+/// This is used to "replay" the configuration. See changeConditionalState.
 const Replay = struct {
     const Step = union(enum) {
         /// An argument to parse as if it came from the CLI or file.
@@ -6100,6 +5784,37 @@ pub const Palette = struct {
 
     /// Keep track of which indexes were manually set by the user.
     mask: terminal.color.PaletteMask = .initEmpty(),
+
+    /// The default palette: the standard palette with the first 16 colors
+    /// replaced by ones made for the default background.
+    pub const hallows: terminal.color.Palette = hallows: {
+        const named = [16]u24{
+            0x3B3433, // black
+            0xF5847A, // red
+            0x4AC363, // green
+            0xDDA92A, // yellow
+            0x4596FF, // blue
+            0xB78FF0, // magenta
+            0x41CCD7, // cyan
+            0xC8CDD2, // white
+            0x8A9096, // bright black
+            0xFFA89E, // bright red
+            0x74D98A, // bright green
+            0xF3C75A, // bright yellow
+            0x6DB8FF, // bright blue
+            0xD2B4FF, // bright magenta
+            0x6EE0E8, // bright cyan
+            0xF3F8FC, // bright white
+        };
+
+        var result = terminal.color.default;
+        for (named, 0..) |hex, i| result[i] = .{
+            .r = @truncate(hex >> 16),
+            .g = @truncate(hex >> 8),
+            .b = @truncate(hex),
+        };
+        break :hallows result;
+    };
 
     /// ghostty_config_palette_s
     pub const C = extern struct {
@@ -10172,154 +9887,6 @@ pub const WindowDecoration = enum(c_int) {
     }
 };
 
-/// See theme
-pub const Theme = struct {
-    light: []const u8,
-    dark: []const u8,
-
-    pub fn parseCLI(self: *Theme, alloc: Allocator, input_: ?[]const u8) !void {
-        const input = input_ orelse return error.ValueRequired;
-        if (input.len == 0) return error.ValueRequired;
-
-        // If there is a comma, equal sign, or colon, then we assume that
-        // we're parsing a light/dark mode theme pair. Note that "=" isn't
-        // actually valid for setting a light/dark mode pair but I anticipate
-        // it'll be a common typo.
-        //
-        // On Windows, a colon at index 1 is a drive letter (e.g. C:\...)
-        // and should not trigger light/dark pair parsing.
-        const has_colon = if (comptime builtin.os.tag == .windows)
-            if (std.mem.indexOf(u8, input, ":")) |idx| idx != 1 else false
-        else
-            std.mem.indexOf(u8, input, ":") != null;
-        if (std.mem.indexOf(u8, input, ",") != null or
-            std.mem.indexOf(u8, input, "=") != null or
-            has_colon)
-        {
-            self.* = try cli.args.parseAutoStruct(
-                Theme,
-                alloc,
-                input,
-                null,
-            );
-            return;
-        }
-
-        // Trim our value
-        const trimmed = std.mem.trim(u8, input, cli.args.whitespace);
-
-        // Set the value to the specified value directly.
-        self.* = .{
-            .light = try alloc.dupeZ(u8, trimmed),
-            .dark = self.light,
-        };
-    }
-
-    /// Expand tilde paths in light/dark theme values.
-    pub fn finalize(self: *Theme, alloc: Allocator) Allocator.Error!void {
-        var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-
-        const light = expandHome(self.light, &buf);
-        if (!std.mem.eql(u8, light, self.light))
-            self.light = try alloc.dupeZ(u8, light);
-
-        const dark = expandHome(self.dark, &buf);
-        if (!std.mem.eql(u8, dark, self.dark))
-            self.dark = try alloc.dupeZ(u8, dark);
-    }
-
-    /// Deep copy of the struct. Required by Config.
-    pub fn clone(self: *const Theme, alloc: Allocator) Allocator.Error!Theme {
-        return .{
-            .light = try alloc.dupeZ(u8, self.light),
-            .dark = try alloc.dupeZ(u8, self.dark),
-        };
-    }
-
-    /// Used by Formatter
-    pub fn formatEntry(
-        self: Theme,
-        formatter: anytype,
-    ) !void {
-        var buf: [4096]u8 = undefined;
-        if (std.mem.eql(u8, self.light, self.dark)) {
-            try formatter.formatEntry([]const u8, self.light);
-            return;
-        }
-
-        const str = std.fmt.bufPrint(&buf, "light:{s},dark:{s}", .{
-            self.light,
-            self.dark,
-        }) catch return error.OutOfMemory;
-        try formatter.formatEntry([]const u8, str);
-    }
-
-    test "parse Theme" {
-        const testing = std.testing;
-        var arena = ArenaAllocator.init(testing.allocator);
-        defer arena.deinit();
-        const alloc = arena.allocator();
-
-        // Single
-        {
-            var v: Theme = undefined;
-            try v.parseCLI(alloc, "foo");
-            try testing.expectEqualStrings("foo", v.light);
-            try testing.expectEqualStrings("foo", v.dark);
-        }
-
-        // Single whitespace
-        {
-            var v: Theme = undefined;
-            try v.parseCLI(alloc, "  foo  ");
-            try testing.expectEqualStrings("foo", v.light);
-            try testing.expectEqualStrings("foo", v.dark);
-        }
-
-        // Light/dark
-        {
-            var v: Theme = undefined;
-            try v.parseCLI(alloc, " light:foo,  dark : bar  ");
-            try testing.expectEqualStrings("foo", v.light);
-            try testing.expectEqualStrings("bar", v.dark);
-        }
-
-        // Expand tilde to home
-        {
-            var environ_map = try testing.environ.createMap(alloc);
-            defer environ_map.deinit();
-
-            var home_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-            const home = try internal_os.expandHome(
-                testing.io,
-                &environ_map,
-                "~/",
-                &home_buf,
-            );
-
-            var v: Theme = undefined;
-            try v.parseCLI(alloc, "light:~/foo, dark:~/bar");
-            try v.finalize(alloc);
-
-            var expected_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-            try testing.expectEqualStrings(
-                try std.fmt.bufPrint(&expected_buf, "{s}foo", .{home}),
-                v.light,
-            );
-            try testing.expectEqualStrings(
-                try std.fmt.bufPrint(&expected_buf, "{s}bar", .{home}),
-                v.dark,
-            );
-        }
-
-        var v: Theme = undefined;
-        try testing.expectError(error.ValueRequired, v.parseCLI(alloc, null));
-        try testing.expectError(error.ValueRequired, v.parseCLI(alloc, ""));
-        try testing.expectError(error.InvalidValue, v.parseCLI(alloc, "light:foo"));
-        try testing.expectError(error.InvalidValue, v.parseCLI(alloc, "dark:foo"));
-    }
-};
-
 pub const Duration = struct {
     /// Duration in nanoseconds
     duration: u64 = 0,
@@ -10793,78 +10360,22 @@ test "clone preserves conditional state" {
     try testing.expectEqual(.dark, dest._conditional_state.theme);
 }
 
-test "clone can then change conditional state" {
-    // This tests a particular bug sequence where:
-    //   1. Load light
-    //   2. Convert to dark
-    //   3. Clone dark
-    //   4. Convert to light
-    //   5. Config is still dark (bug)
-    const testing = std.testing;
-    const alloc = testing.allocator;
-    var arena = ArenaAllocator.init(alloc);
-    defer arena.deinit();
-    const alloc_arena = arena.allocator();
-
-    // Setup our test theme
-    var td = try internal_os.TempDir.init();
-    defer td.deinit();
-    var buf: [4096]u8 = undefined;
-    {
-        var file = try td.dir.createFile(testing.io, "theme_light", .{});
-        defer file.close(testing.io);
-        var writer = file.writer(testing.io, &buf);
-        try writer.interface.writeAll(@embedFile("testdata/theme_light"));
-        try writer.end();
-    }
-    {
-        var file = try td.dir.createFile(testing.io, "theme_dark", .{});
-        defer file.close(testing.io);
-        var writer = file.writer(testing.io, &buf);
-        try writer.interface.writeAll(@embedFile("testdata/theme_dark"));
-        try writer.end();
-    }
-    var light_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const light = light_buf[0..try td.dir.realPathFile(testing.io, "theme_light", &light_buf)];
-    var dark_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const dark = dark_buf[0..try td.dir.realPathFile(testing.io, "theme_dark", &dark_buf)];
-
-    var cfg_light = try Config.default(alloc);
-    defer cfg_light.deinit();
-    var it: TestIterator = .{ .data = &.{
-        try std.fmt.allocPrint(
-            alloc_arena,
-            "--theme=light:{s},dark:{s}",
-            .{ light, dark },
-        ),
-    } };
-    try cfg_light.loadIter(alloc, &it);
-    try cfg_light.finalize();
-
-    var cfg_dark = (try cfg_light.changeConditionalState(.{ .theme = .dark })).?;
-    defer cfg_dark.deinit();
-
-    try testing.expectEqual(Color{
-        .r = 0xEE,
-        .g = 0xEE,
-        .b = 0xEE,
-    }, cfg_dark.background);
-
-    var cfg_clone = try cfg_dark.clone(alloc);
-    defer cfg_clone.deinit();
-    try testing.expectEqual(Color{
-        .r = 0xEE,
-        .g = 0xEE,
-        .b = 0xEE,
-    }, cfg_clone.background);
-
-    var cfg_light2 = (try cfg_clone.changeConditionalState(.{ .theme = .light })).?;
-    defer cfg_light2.deinit();
-    try testing.expectEqual(Color{
-        .r = 0xFF,
-        .g = 0xFF,
-        .b = 0xFF,
-    }, cfg_light2.background);
+/// Append `arg` to the replay steps of `cfg` so that it only applies
+/// when the conditional state's theme is `theme`, the way conditional
+/// configuration is replayed by `changeConditionalState`.
+fn testAddThemeConditionalArg(
+    cfg: *Config,
+    theme: conditional.State.Theme,
+    arg: []const u8,
+) !void {
+    const alloc_arena = cfg._arena.?.allocator();
+    const conds = try alloc_arena.alloc(Conditional, 1);
+    conds[0] = .{ .key = .theme, .op = .eq, .value = @tagName(theme) };
+    try cfg._replay_steps.append(alloc_arena, .{ .conditional_arg = .{
+        .conditions = conds,
+        .arg = try alloc_arena.dupe(u8, arg),
+    } });
+    cfg._conditional_set.insert(.theme);
 }
 
 test "clone preserves conditional set" {
@@ -10873,17 +10384,121 @@ test "clone preserves conditional set" {
 
     var cfg = try Config.default(alloc);
     defer cfg.deinit();
-    var it: TestIterator = .{ .data = &.{
-        "--theme=light:foo,dark:bar",
-        "--window-theme=auto",
-    } };
-    try cfg.loadIter(alloc, &it);
+    try testAddThemeConditionalArg(&cfg, .dark, "--font-thicken=true");
     try cfg.finalize();
 
     var clone1 = try cfg.clone(alloc);
     defer clone1.deinit();
 
     try testing.expect(clone1._conditional_set.contains(.theme));
+}
+
+test "changeConditionalState ignores irrelevant changes" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var cfg = try Config.default(alloc);
+    defer cfg.deinit();
+    var it: TestIterator = .{ .data = &.{
+        "--font-thicken=true",
+    } };
+    try cfg.loadIter(alloc, &it);
+    try cfg.finalize();
+
+    try testing.expect(try cfg.changeConditionalState(
+        .{ .theme = .dark },
+    ) == null);
+}
+
+test "changeConditionalState applies relevant changes" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var cfg = try Config.default(alloc);
+    defer cfg.deinit();
+    try testAddThemeConditionalArg(&cfg, .dark, "--font-thicken=true");
+    try cfg.finalize();
+    try testing.expect(!cfg.@"font-thicken");
+
+    var cfg2 = (try cfg.changeConditionalState(.{ .theme = .dark })).?;
+    defer cfg2.deinit();
+
+    try testing.expect(cfg2.@"font-thicken");
+}
+
+test "locked appearance options keep their defaults" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var cfg = try Config.default(alloc);
+    defer cfg.deinit();
+    var it: TestIterator = .{ .data = &.{
+        "--background=#ABCDEF",
+        "--palette=1=#FF0000",
+        "--background-opacity=0.5",
+        "--background-blur=false",
+        "--window-theme=light",
+        "--macos-titlebar-style=native",
+        "--font-thicken=true",
+    } };
+    try cfg.loadIter(alloc, &it);
+    try cfg.finalize();
+
+    // Locked options are back to their defaults...
+    try testing.expectEqual(Color{ .r = 0x2D, .g = 0x26, .b = 0x25 }, cfg.background);
+    try testing.expectEqual(Palette.hallows, cfg.palette.value);
+    try testing.expect(cfg.palette.mask.count() == 0);
+    try testing.expectEqual(@as(f64, 0.6), cfg.@"background-opacity");
+    try testing.expectEqual(BackgroundBlur.true, cfg.@"background-blur");
+    try testing.expectEqual(WindowTheme.auto, cfg.@"window-theme");
+    try testing.expectEqual(MacTitlebarStyle.tabs, cfg.@"macos-titlebar-style");
+
+    // ...but other options can still be changed.
+    try testing.expect(cfg.@"font-thicken");
+
+    // One diagnostic per locked option that was changed.
+    try testing.expectEqual(@as(usize, 6), cfg._diagnostics.items().len);
+    try testing.expectEqualStrings(
+        "background can't be changed: Hallows has a fixed look",
+        cfg._diagnostics.items()[0].message,
+    );
+
+    // Finalizing again doesn't add more diagnostics.
+    try cfg.finalize();
+    try testing.expectEqual(@as(usize, 6), cfg._diagnostics.items().len);
+}
+
+test "locked appearance options at their default are not diagnosed" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var cfg = try Config.default(alloc);
+    defer cfg.deinit();
+    var it: TestIterator = .{ .data = &.{
+        "--background=#2D2625",
+        "--background-opacity=0.6",
+        "--macos-titlebar-style=tabs",
+    } };
+    try cfg.loadIter(alloc, &it);
+    try cfg.finalize();
+
+    try testing.expect(cfg._diagnostics.empty());
+}
+
+test "locked appearance options stay locked with conditional state" {
+    const testing = std.testing;
+    const alloc = testing.allocator;
+
+    var cfg = try Config.default(alloc);
+    defer cfg.deinit();
+    try testAddThemeConditionalArg(&cfg, .dark, "--background=#ABCDEF");
+    try cfg.finalize();
+    try testing.expect(cfg._diagnostics.empty());
+
+    var cfg2 = (try cfg.changeConditionalState(.{ .theme = .dark })).?;
+    defer cfg2.deinit();
+    try testing.expectEqual(Color{ .r = 0x2D, .g = 0x26, .b = 0x25 }, cfg2.background);
+    try testing.expectEqual(@as(usize, 1), cfg2._diagnostics.items().len);
 }
 
 test "working-directory expands tilde" {
@@ -10923,287 +10538,6 @@ test "changed" {
 
     try testing.expect(source.changed(&dest, .@"font-thicken"));
     try testing.expect(!source.changed(&dest, .@"font-size"));
-}
-
-test "changeConditionalState ignores irrelevant changes" {
-    const testing = std.testing;
-    const alloc = testing.allocator;
-
-    {
-        var cfg = try Config.default(alloc);
-        defer cfg.deinit();
-        var it: TestIterator = .{ .data = &.{
-            "--theme=foo",
-        } };
-        try cfg.loadIter(alloc, &it);
-        try cfg.finalize();
-
-        try testing.expect(try cfg.changeConditionalState(
-            .{ .theme = .dark },
-        ) == null);
-    }
-}
-
-test "changeConditionalState applies relevant changes" {
-    const testing = std.testing;
-    const alloc = testing.allocator;
-
-    {
-        var cfg = try Config.default(alloc);
-        defer cfg.deinit();
-        var it: TestIterator = .{ .data = &.{
-            "--theme=light:foo,dark:bar",
-        } };
-        try cfg.loadIter(alloc, &it);
-        try cfg.finalize();
-
-        var cfg2 = (try cfg.changeConditionalState(.{ .theme = .dark })).?;
-        defer cfg2.deinit();
-
-        try testing.expect(cfg2._conditional_set.contains(.theme));
-    }
-}
-test "theme loading" {
-    const testing = std.testing;
-    const alloc = testing.allocator;
-    var arena = ArenaAllocator.init(alloc);
-    defer arena.deinit();
-    const alloc_arena = arena.allocator();
-
-    // Setup our test theme
-    var td = try internal_os.TempDir.init();
-    defer td.deinit();
-    var buf: [4096]u8 = undefined;
-    {
-        var file = try td.dir.createFile(testing.io, "theme", .{});
-        defer file.close(testing.io);
-        var writer = file.writer(testing.io, &buf);
-        try writer.interface.writeAll(@embedFile("testdata/theme_simple"));
-        try writer.end();
-    }
-    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const path = path_buf[0..try td.dir.realPathFile(testing.io, "theme", &path_buf)];
-
-    var cfg = try Config.default(alloc);
-    defer cfg.deinit();
-    var it: TestIterator = .{ .data = &.{
-        try std.fmt.allocPrint(alloc_arena, "--theme={s}", .{path}),
-    } };
-    try cfg.loadIter(alloc, &it);
-    try cfg.finalize();
-
-    try testing.expectEqual(Color{
-        .r = 0x12,
-        .g = 0x3A,
-        .b = 0xBC,
-    }, cfg.background);
-
-    // Not a conditional theme
-    try testing.expect(!cfg._conditional_set.contains(.theme));
-}
-
-test "theme loading preserves conditional state" {
-    const testing = std.testing;
-    const alloc = testing.allocator;
-    var arena = ArenaAllocator.init(alloc);
-    defer arena.deinit();
-    const alloc_arena = arena.allocator();
-
-    // Setup our test theme
-    var td = try internal_os.TempDir.init();
-    defer td.deinit();
-    var buf: [4096]u8 = undefined;
-    {
-        var file = try td.dir.createFile(testing.io, "theme", .{});
-        defer file.close(testing.io);
-        var writer = file.writer(testing.io, &buf);
-        try writer.interface.writeAll(@embedFile("testdata/theme_simple"));
-        try writer.end();
-    }
-    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const path = path_buf[0..try td.dir.realPathFile(testing.io, "theme", &path_buf)];
-
-    var cfg = try Config.default(alloc);
-    defer cfg.deinit();
-    cfg._conditional_state = .{ .theme = .dark };
-    var it: TestIterator = .{ .data = &.{
-        try std.fmt.allocPrint(alloc_arena, "--theme={s}", .{path}),
-    } };
-    try cfg.loadIter(alloc, &it);
-    try cfg.finalize();
-
-    try testing.expect(cfg._conditional_state.theme == .dark);
-}
-
-test "theme priority is lower than config" {
-    const testing = std.testing;
-    const alloc = testing.allocator;
-    var arena = ArenaAllocator.init(alloc);
-    defer arena.deinit();
-    const alloc_arena = arena.allocator();
-
-    // Setup our test theme
-    var td = try internal_os.TempDir.init();
-    defer td.deinit();
-    var buf: [4096]u8 = undefined;
-    {
-        var file = try td.dir.createFile(testing.io, "theme", .{});
-        defer file.close(testing.io);
-        var writer = file.writer(testing.io, &buf);
-        try writer.interface.writeAll(@embedFile("testdata/theme_simple"));
-        try writer.end();
-    }
-    var path_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const path = path_buf[0..try td.dir.realPathFile(testing.io, "theme", &path_buf)];
-
-    var cfg = try Config.default(alloc);
-    defer cfg.deinit();
-    var it: TestIterator = .{ .data = &.{
-        "--background=#ABCDEF",
-        try std.fmt.allocPrint(alloc_arena, "--theme={s}", .{path}),
-    } };
-    try cfg.loadIter(alloc, &it);
-    try cfg.finalize();
-
-    try testing.expectEqual(Color{
-        .r = 0xAB,
-        .g = 0xCD,
-        .b = 0xEF,
-    }, cfg.background);
-}
-
-test "theme loading correct light/dark" {
-    const testing = std.testing;
-    const alloc = testing.allocator;
-    var arena = ArenaAllocator.init(alloc);
-    defer arena.deinit();
-    const alloc_arena = arena.allocator();
-
-    // Setup our test theme
-    var td = try internal_os.TempDir.init();
-    defer td.deinit();
-    var buf: [4096]u8 = undefined;
-    {
-        var file = try td.dir.createFile(testing.io, "theme_light", .{});
-        defer file.close(testing.io);
-        var writer = file.writer(testing.io, &buf);
-        try writer.interface.writeAll(@embedFile("testdata/theme_light"));
-        try writer.end();
-    }
-    {
-        var file = try td.dir.createFile(testing.io, "theme_dark", .{});
-        defer file.close(testing.io);
-        var writer = file.writer(testing.io, &buf);
-        try writer.interface.writeAll(@embedFile("testdata/theme_dark"));
-        try writer.end();
-    }
-    var light_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const light = light_buf[0..try td.dir.realPathFile(testing.io, "theme_light", &light_buf)];
-    var dark_buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
-    const dark = dark_buf[0..try td.dir.realPathFile(testing.io, "theme_dark", &dark_buf)];
-
-    // Light
-    {
-        var cfg = try Config.default(alloc);
-        defer cfg.deinit();
-        var it: TestIterator = .{ .data = &.{
-            try std.fmt.allocPrint(
-                alloc_arena,
-                "--theme=light:{s},dark:{s}",
-                .{ light, dark },
-            ),
-        } };
-        try cfg.loadIter(alloc, &it);
-        try cfg.finalize();
-
-        try testing.expectEqual(Color{
-            .r = 0xFF,
-            .g = 0xFF,
-            .b = 0xFF,
-        }, cfg.background);
-    }
-
-    // Dark
-    {
-        var cfg = try Config.default(alloc);
-        defer cfg.deinit();
-        cfg._conditional_state = .{ .theme = .dark };
-        var it: TestIterator = .{ .data = &.{
-            try std.fmt.allocPrint(
-                alloc_arena,
-                "--theme=light:{s},dark:{s}",
-                .{ light, dark },
-            ),
-        } };
-        try cfg.loadIter(alloc, &it);
-        try cfg.finalize();
-
-        try testing.expectEqual(Color{
-            .r = 0xEE,
-            .g = 0xEE,
-            .b = 0xEE,
-        }, cfg.background);
-    }
-
-    // Light to Dark
-    {
-        var cfg = try Config.default(alloc);
-        defer cfg.deinit();
-        var it: TestIterator = .{ .data = &.{
-            try std.fmt.allocPrint(
-                alloc_arena,
-                "--theme=light:{s},dark:{s}",
-                .{ light, dark },
-            ),
-        } };
-        try cfg.loadIter(alloc, &it);
-        try cfg.finalize();
-
-        var new = (try cfg.changeConditionalState(.{ .theme = .dark })).?;
-        defer new.deinit();
-        try testing.expectEqual(Color{
-            .r = 0xEE,
-            .g = 0xEE,
-            .b = 0xEE,
-        }, new.background);
-    }
-}
-
-test "theme specifying light/dark changes window-theme from auto" {
-    const testing = std.testing;
-    const alloc = testing.allocator;
-
-    {
-        var cfg = try Config.default(alloc);
-        defer cfg.deinit();
-        var it: TestIterator = .{ .data = &.{
-            "--theme=light:foo,dark:bar",
-            "--window-theme=auto",
-        } };
-        try cfg.loadIter(alloc, &it);
-        try cfg.finalize();
-
-        try testing.expect(cfg.@"window-theme" == .system);
-    }
-}
-
-test "theme specifying light/dark sets theme usage in conditional state" {
-    const testing = std.testing;
-    const alloc = testing.allocator;
-
-    {
-        var cfg = try Config.default(alloc);
-        defer cfg.deinit();
-        var it: TestIterator = .{ .data = &.{
-            "--theme=light:foo,dark:bar",
-            "--window-theme=auto",
-        } };
-        try cfg.loadIter(alloc, &it);
-        try cfg.finalize();
-
-        try testing.expect(cfg.@"window-theme" == .system);
-        try testing.expect(cfg._conditional_set.contains(.theme));
-    }
 }
 
 test "scrollback limits" {
@@ -11358,7 +10692,8 @@ test "compatibility: removed cursor-invert-fg-bg" {
             "--cursor-invert-fg-bg",
         } };
         try cfg.loadIter(alloc, &it);
-        try cfg.finalize();
+
+        // No finalize: it resets this locked option (see `locked_keys`).
 
         try testing.expectEqual(
             TerminalColor.@"cell-foreground",
@@ -11382,7 +10717,8 @@ test "compatibility: removed selection-invert-fg-bg" {
             "--selection-invert-fg-bg",
         } };
         try cfg.loadIter(alloc, &it);
-        try cfg.finalize();
+
+        // No finalize: it resets this locked option (see `locked_keys`).
 
         try testing.expectEqual(
             TerminalColor.@"cell-background",
@@ -11406,7 +10742,8 @@ test "compatibility: removed bold-is-bright" {
             "--bold-is-bright",
         } };
         try cfg.loadIter(alloc, &it);
-        try cfg.finalize();
+
+        // No finalize: it resets this locked option (see `locked_keys`).
 
         try testing.expectEqual(
             BoldColor.bright,

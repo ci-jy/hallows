@@ -33,12 +33,6 @@ fn writeZshCompletions(writer: *std.Io.Writer) !void {
         \\  _describe -t fonts 'fonts' fonts
         \\}
         \\
-        \\_themes() {
-        \\  local theme_list=$(hallows +list-themes | sed -E 's/^(.*) \(.*$/\1/')
-        \\  local themes=(${(f)theme_list})
-        \\  _describe -t themes 'themes' themes
-        \\}
-        \\
     );
 
     try writer.writeAll("_config() {\n");
@@ -53,9 +47,6 @@ fn writeZshCompletions(writer: *std.Io.Writer) !void {
         if (std.mem.startsWith(u8, field.name, "font-family")) {
             try writer.writeAll(equals_required);
             try writer.writeAll("_fonts");
-        } else if (std.mem.eql(u8, "theme", field.name)) {
-            try writer.writeAll(equals_required);
-            try writer.writeAll("_themes");
         } else if (std.mem.eql(u8, "working-directory", field.name)) {
             try writer.writeAll(equals_required);
             try writer.writeAll("{_files -/}");

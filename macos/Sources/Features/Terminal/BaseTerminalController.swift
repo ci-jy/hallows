@@ -46,6 +46,7 @@ class BaseTerminalController: NSWindowController,
         didSet {
             syncFocusToSurfaceTree()
             if let focusedSurface { fileTree.follow(focusedSurface) }
+            (window as? TerminalWindow)?.focusedSurfaceDidChange(focusedSurface)
         }
     }
 

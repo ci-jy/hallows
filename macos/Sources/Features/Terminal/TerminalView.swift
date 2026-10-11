@@ -67,6 +67,11 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
         return URL(fileURLWithPath: surfacePwd)
     }
 
+    // The initial size of the focused card, so its surface gets the configured size.
+    private var initialCardSize: NSSize? {
+        lastFocusedSurface?.value?.initialSize.map(TerminalPane.cardSize(forSurface:))
+    }
+
     var body: some View {
         switch ghostty.readiness {
         case .loading:
@@ -82,8 +87,11 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                         DebugBuildWarningView()
                     }
 
-                    HStack(spacing: 0) {
-                        FileTreeContainer(model: viewModel.fileTree)
+                    HStack(spacing: TerminalPane.spacing) {
+                        FileTreeContainer(
+                            model: viewModel.fileTree,
+                            background: ghostty.config.backgroundColor,
+                            backgroundOpacity: ghostty.config.backgroundOpacity)
 
                         TerminalSplitTreeView(
                             tree: viewModel.surfaceTree,
@@ -107,8 +115,17 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
                                 guard let size = newValue else { return }
                                 self.delegate?.cellSizeDidChange(to: size)
                             }
-                            .frame(idealWidth: lastFocusedSurface?.value?.initialSize?.width,
-                                   idealHeight: lastFocusedSurface?.value?.initialSize?.height)
+                            .frame(idealWidth: initialCardSize?.width,
+                                   idealHeight: initialCardSize?.height)
+                    }
+                    .padding(TerminalPane.spacing)
+                    .backgroundPreferenceValue(TerminalPaneCardBoundsKey.self) { cards in
+                        GeometryReader { geometry in
+                            TerminalPaneChrome(
+                                surfaceView: viewModel.surfaceTree.backgroundSurface(focused: lastFocusedSurface?.value),
+                                config: ghostty.config,
+                                cards: cards.map { geometry[$0] })
+                        }
                     }
                 }
                 // Ignore safe area to extend up in to the titlebar region if we have the "hidden" titlebar style
@@ -137,11 +154,12 @@ struct TerminalView<ViewModel: TerminalViewModel>: View {
 /// Shows the file tree sidebar when it's visible.
 private struct FileTreeContainer: View {
     @ObservedObject var model: FileTreeModel
+    let background: Color
+    let backgroundOpacity: Double
 
     var body: some View {
         if model.isVisible {
-            FileTreeSidebar(model: model)
-            Divider()
+            FileTreeSidebar(model: model, background: background, backgroundOpacity: backgroundOpacity)
         }
     }
 }

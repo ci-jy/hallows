@@ -123,6 +123,17 @@ extension Ghostty {
             // Don't call super - the drag will be initiated in mouseDragged.
         }
 
+        override func mouseUp(with event: NSEvent) {
+            // A click without a drag focuses the surface, and a double-click
+            // zooms it, like a click on a window's titlebar.
+            guard let surfaceView else { return }
+            if event.clickCount == 2 {
+                _ = surfaceView.surfaceModel?.perform(action: "toggle_split_zoom")
+            } else {
+                Ghostty.moveFocus(to: surfaceView)
+            }
+        }
+
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
 

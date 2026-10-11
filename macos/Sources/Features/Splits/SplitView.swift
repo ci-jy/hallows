@@ -30,9 +30,10 @@ struct SplitView<L: View, R: View>: View {
     /// The current fractional width of the split view. 0.5 means L/R are equally sized, for example.
     @Binding var split: CGFloat
 
-    /// The visible size of the splitter, in points. The invisible size is a transparent hitbox that can still
-    /// be used for getting a resize handle. The total width/height of the splitter is the sum of both.
-    private let splitterVisibleSize: CGFloat = 1
+    /// The visible size of the splitter, in points: the space between the two views. The invisible size is
+    /// a transparent hitbox that can still be used for getting a resize handle. The total width/height of the
+    /// splitter is the sum of both.
+    private let splitterVisibleSize: CGFloat
     private let splitterInvisibleSize: CGFloat = 6
 
     var body: some View {
@@ -73,6 +74,7 @@ struct SplitView<L: View, R: View>: View {
         _ direction: SplitViewDirection,
         _ split: Binding<CGFloat>,
         dividerColor: Color,
+        dividerSize: CGFloat = 1,
         resizeIncrements: NSSize = .init(width: 1, height: 1),
         @ViewBuilder left: (() -> L),
         @ViewBuilder right: (() -> R),
@@ -81,6 +83,7 @@ struct SplitView<L: View, R: View>: View {
         self.direction = direction
         self._split = split
         self.dividerColor = dividerColor
+        self.splitterVisibleSize = dividerSize
         self.resizeIncrements = resizeIncrements
         self.left = left()
         self.right = right()

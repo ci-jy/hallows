@@ -25,6 +25,10 @@ extension Ghostty {
         @EnvironmentObject private var ghostty: Ghostty.App
         @Environment(\.ghosttyLastFocusedSurface) private var lastFocusedSurface
 
+        // True when a pane header above us shows the program status and acts
+        // as the drag handle, so we don't show our own.
+        @Environment(\.ghosttySurfaceHasPaneHeader) private var hasPaneHeader
+
         private var isFocusedSurface: Bool {
             surfaceFocus || lastFocusedSurface?.value === surfaceView
         }
@@ -91,7 +95,7 @@ extension Ghostty {
                 }
 
                 // Program status badge, below the readonly badge if both show.
-                if let status = surfaceView.programStatus, status.state != .idle {
+                if !hasPaneHeader, let status = surfaceView.programStatus, status.state != .idle {
                     ProgramStatusBadge(status: status)
                         .padding(.top, surfaceView.readonly ? 32 : 0)
                 }
@@ -169,10 +173,12 @@ extension Ghostty {
 
                 // Grab handle for dragging the window. We want this to appear at the very
                 // top Z-index os it isn't faded by the unfocused overlay.
-                SurfaceGrabHandle(
-                    surfaceView: surfaceView,
-                    dragHandle: ghostty.config.dragHandle,
-                )
+                if !hasPaneHeader {
+                    SurfaceGrabHandle(
+                        surfaceView: surfaceView,
+                        dragHandle: ghostty.config.dragHandle,
+                    )
+                }
             }
         }
     }
@@ -1036,66 +1042,15 @@ extension Ghostty {
     struct ProgramStatusBadge: View {
         let status: Ghostty.Action.ProgramStatus
 
-        private var symbol: String {
-            switch status.state {
-            case .idle, .working: return "hourglass"
-            case .done: return "checkmark.circle.fill"
-            case .error: return "xmark.octagon.fill"
-            case .blocked:
-                switch status.kind {
-                case .permission: return "hand.raised.fill"
-                case .question: return "questionmark.bubble.fill"
-                case .auth: return "key.fill"
-                case .none: return "exclamationmark.bubble.fill"
-                }
-            }
-        }
-
-        private var color: Color {
-            switch status.state {
-            case .idle, .working: return .accentColor
-            case .done: return .green
-            case .error: return .red
-            case .blocked: return .orange
-            }
-        }
-
-        private var stateDescription: String {
-            switch status.state {
-            case .idle: return "Idle"
-            case .working: return "Working"
-            case .done: return "Finished"
-            case .error: return "Failed"
-            case .blocked:
-                switch status.kind {
-                case .permission: return "Needs permission"
-                case .question: return "Has a question"
-                case .auth: return "Needs you to sign in"
-                case .none: return "Needs your attention"
-                }
-            }
-        }
-
-        /// The tooltip and accessibility text. The label and message are
-        /// untrusted text from the program, so they are only ever shown
-        /// verbatim.
-        private var description: String {
-            var lines = [stateDescription]
-            if !status.label.isEmpty { lines[0] = "\(status.label): \(stateDescription)" }
-            if let progress = status.progress { lines.append("\(progress)%") }
-            if !status.msg.isEmpty { lines.append(status.msg) }
-            return lines.joined(separator: "\n")
-        }
-
         var body: some View {
             VStack {
                 HStack {
                     Spacer()
 
                     HStack(spacing: 5) {
-                        Image(systemName: symbol)
+                        Image(systemName: status.symbol)
                             .font(.system(size: 12))
-                            .foregroundStyle(color)
+                            .foregroundStyle(status.color)
 
                         if !status.label.isEmpty {
                             Text(verbatim: status.label)
@@ -1117,12 +1072,12 @@ extension Ghostty {
                             .fill(.regularMaterial)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 6)
-                                    .strokeBorder(color.opacity(0.6), lineWidth: 1.5)
+                                    .strokeBorder(status.color.opacity(0.6), lineWidth: 1.5)
                             )
                     )
-                    .help(Text(verbatim: description))
+                    .help(Text(verbatim: status.description))
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(Text(verbatim: description))
+                    .accessibilityLabel(Text(verbatim: status.description))
                 }
                 .padding(8)
 
@@ -1237,6 +1192,11 @@ private struct GhosttyLastFocusedSurfaceKey: EnvironmentKey {
     static let defaultValue: Weak<Ghostty.SurfaceView>? = nil
 }
 
+private struct GhosttySurfaceHasPaneHeaderKey: EnvironmentKey {
+    /// True when the surface is shown in a pane card with a header.
+    static let defaultValue: Bool = false
+}
+
 extension EnvironmentValues {
     var ghosttySurfaceView: Ghostty.SurfaceView? {
         get { self[GhosttySurfaceViewKey.self] }
@@ -1246,6 +1206,11 @@ extension EnvironmentValues {
     var ghosttyLastFocusedSurface: Weak<Ghostty.SurfaceView>? {
         get { self[GhosttyLastFocusedSurfaceKey.self] }
         set { self[GhosttyLastFocusedSurfaceKey.self] = newValue }
+    }
+
+    var ghosttySurfaceHasPaneHeader: Bool {
+        get { self[GhosttySurfaceHasPaneHeaderKey.self] }
+        set { self[GhosttySurfaceHasPaneHeaderKey.self] = newValue }
     }
 }
 
@@ -1288,5 +1253,59 @@ extension FocusedValues {
 
     struct FocusedGhosttySurfaceCellSize: FocusedValueKey {
         typealias Value = CGSize
+    }
+}
+
+/// How the program status is shown in the badge and in pane headers.
+extension Ghostty.Action.ProgramStatus {
+    var symbol: String {
+        switch state {
+        case .idle, .working: return "hourglass"
+        case .done: return "checkmark.circle.fill"
+        case .error: return "xmark.octagon.fill"
+        case .blocked:
+            switch kind {
+            case .permission: return "hand.raised.fill"
+            case .question: return "questionmark.bubble.fill"
+            case .auth: return "key.fill"
+            case .none: return "exclamationmark.bubble.fill"
+            }
+        }
+    }
+
+    var color: Color {
+        switch state {
+        case .idle, .working: return .accentColor
+        case .done: return .green
+        case .error: return .red
+        case .blocked: return .orange
+        }
+    }
+
+    var stateDescription: String {
+        switch state {
+        case .idle: return "Idle"
+        case .working: return "Working"
+        case .done: return "Finished"
+        case .error: return "Failed"
+        case .blocked:
+            switch kind {
+            case .permission: return "Needs permission"
+            case .question: return "Has a question"
+            case .auth: return "Needs you to sign in"
+            case .none: return "Needs your attention"
+            }
+        }
+    }
+
+    /// The tooltip and accessibility text. The label and message are
+    /// untrusted text from the program, so they are only ever shown
+    /// verbatim.
+    var description: String {
+        var lines = [stateDescription]
+        if !label.isEmpty { lines[0] = "\(label): \(stateDescription)" }
+        if let progress = progress { lines.append("\(progress)%") }
+        if !msg.isEmpty { lines.append(msg) }
+        return lines.joined(separator: "\n")
     }
 }

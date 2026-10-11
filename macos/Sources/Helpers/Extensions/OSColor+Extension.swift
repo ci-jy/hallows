@@ -70,6 +70,20 @@ extension NSColor {
             alpha: a
         )
     }
+
+    /// The window chrome around terminal panes for a terminal background of this
+    /// color. It's mostly opaque, so it keeps its tint over the desktop, while the
+    /// panes' glass is frosted lighter, so the panes read as cards on the window.
+    var paneChromeColor: NSColor {
+        guard let rgb = usingColorSpace(.sRGB) else { return self }
+        let factor: CGFloat = isLightColor ? 0.92 : 1
+        return NSColor(
+            srgbRed: rgb.redComponent * factor,
+            green: rgb.greenComponent * factor,
+            blue: rgb.blueComponent * factor,
+            alpha: max(rgb.alphaComponent, 0.85)
+        )
+    }
 }
 
 // MARK: Ghostty Types
