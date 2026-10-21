@@ -200,6 +200,10 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
         /// don't support a display link.
         display_link: ?DisplayLink = null,
 
+        /// Consecutive display link syncs with nothing to draw while the
+        /// display link is running; see `syncDisplayLink`.
+        display_link_idle_frames: u8 = 0,
+
         /// Health of the most recently completed frame.
         health: std.atomic.Value(Health) = .{ .raw = .healthy },
 
@@ -956,6 +960,10 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
         /// i.e. 120fps, and the floor for any animation wake delay.
         pub const draw_interval_ms: u64 = 8;
 
+        /// Idle frames the display link keeps running for before it's
+        /// stopped, about a second at 120Hz.
+        const display_link_idle_frames_max: u8 = 120;
+
         /// A point in the future when the renderer needs to be driven
         /// again to keep animating, and what kind of drive it needs.
         pub const AnimationWake = struct {
@@ -1151,12 +1159,28 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
                 (self.cells_rebuilt or self.animationWake() != null);
 
             if (should_run) {
+                self.display_link_idle_frames = 0;
                 if (!display_link.isRunning()) {
                     display_link.start() catch {};
                 }
-            } else {
-                display_link.stop() catch {};
+                return;
             }
+
+            // Stopping a CVDisplayLink joins CoreVideo's IO thread, and
+            // after the Mac wakes from sleep that join has been seen to
+            // never return, wedging this thread. So stop as rarely as we
+            // can: only when the link is running and, while visible, only
+            // after a grace period of idle frames, so bursts of output
+            // don't stop and restart the link between every frame.
+            if (!display_link.isRunning()) return;
+            if (self.visible and
+                self.display_link_idle_frames < display_link_idle_frames_max)
+            {
+                self.display_link_idle_frames += 1;
+                return;
+            }
+            self.display_link_idle_frames = 0;
+            display_link.stop() catch {};
         }
 
         /// Set the new font grid.

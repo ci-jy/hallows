@@ -42,9 +42,6 @@ pub const Message = union(enum) {
         old_key: font.SharedGridSet.Key,
     },
 
-    /// Changes the size. The screen size might change, padding, grid, etc.
-    resize: renderer.Size,
-
     /// The derived configuration to update the renderer with.
     change_config: struct {
         alloc: Allocator,

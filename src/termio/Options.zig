@@ -37,5 +37,8 @@ renderer_wakeup: xev.Async,
 /// The mailbox for renderer messages.
 renderer_mailbox: *renderer.Thread.Mailbox,
 
+/// Where to send the renderer the latest size from a resize.
+renderer_size: *renderer.Thread.PendingSize,
+
 /// The mailbox for sending the surface messages.
 surface_mailbox: apprt.surface.Mailbox,

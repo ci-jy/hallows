@@ -50,6 +50,9 @@ renderer_wakeup: xev.Async,
 /// The mailbox for notifying the renderer of things.
 renderer_mailbox: *renderer.Thread.Mailbox,
 
+/// Where to send the renderer the latest size from a resize.
+renderer_size: *renderer.Thread.PendingSize,
+
 /// The mailbox for communicating with the surface.
 surface_mailbox: apprt.surface.Mailbox,
 
@@ -340,6 +343,7 @@ pub fn init(self: *Termio, alloc: Allocator, opts: termio.Options) !void {
         .renderer_state = opts.renderer_state,
         .renderer_wakeup = opts.renderer_wakeup,
         .renderer_mailbox = opts.renderer_mailbox,
+        .renderer_size = opts.renderer_size,
         .surface_mailbox = opts.surface_mailbox,
         .size = opts.size,
         .backend = backend,
@@ -550,7 +554,7 @@ pub fn resize(
     }
 
     // Mail the renderer so that it can update the GPU and re-render
-    _ = self.renderer_mailbox.push(global.io(), .{ .resize = size }, .{ .forever = {} });
+    self.renderer_size.set(size);
     self.renderer_wakeup.notify() catch {};
 }
 

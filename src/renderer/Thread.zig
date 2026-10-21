@@ -25,6 +25,31 @@ const CURSOR_BLINK_INTERVAL = 600;
 /// the future if we want it configurable.
 pub const Mailbox = BlockingQueue(rendererpkg.Message, 64);
 
+/// The latest size from a resize, waiting for the render thread to apply
+/// it. Resizes don't go through the mailbox: only the latest size matters,
+/// and a live resize sends one per frame, so if the render thread is stuck
+/// the mailbox fills and pushing to it blocks the main thread.
+pub const PendingSize = struct {
+    mutex: std.Io.Mutex = .init,
+    size: ?rendererpkg.Size = null,
+
+    /// Replace any size the render thread hasn't applied yet. This never
+    /// waits on rendering, only on the render thread taking the size.
+    pub fn set(self: *PendingSize, size: rendererpkg.Size) void {
+        self.mutex.lockUncancelable(global.io());
+        defer self.mutex.unlock(global.io());
+        self.size = size;
+    }
+
+    fn take(self: *PendingSize) ?rendererpkg.Size {
+        self.mutex.lockUncancelable(global.io());
+        defer self.mutex.unlock(global.io());
+        const size = self.size;
+        self.size = null;
+        return size;
+    }
+};
+
 /// Allocator used for some state
 alloc: std.mem.Allocator,
 
@@ -77,6 +102,9 @@ state: *rendererpkg.State,
 /// The mailbox that can be used to send this thread messages. Note
 /// this is a blocking queue so if it is full you will get errors (or block).
 mailbox: *Mailbox,
+
+/// The latest size from a resize, applied when the mailbox is drained.
+pending_size: *PendingSize,
 
 /// Configuration we need derived from the main config.
 config: DerivedConfig,
@@ -147,6 +175,10 @@ pub fn init(
     var mailbox = try Mailbox.create(alloc);
     errdefer mailbox.destroy(alloc);
 
+    const pending_size = try alloc.create(PendingSize);
+    errdefer alloc.destroy(pending_size);
+    pending_size.* = .{};
+
     var result: Thread = .{
         .alloc = alloc,
         .config = .init(config),
@@ -160,6 +192,7 @@ pub fn init(
         .renderer = renderer_impl,
         .state = state,
         .mailbox = mailbox,
+        .pending_size = pending_size,
     };
 
     // Only enable compression if we have it enabled... save some
@@ -185,6 +218,7 @@ pub fn deinit(self: *Thread) void {
 
     // Nothing can possibly access the mailbox anymore, destroy it.
     self.mailbox.destroy(self.alloc);
+    self.alloc.destroy(self.pending_size);
 }
 
 /// The main entrypoint for the thread.
@@ -392,8 +426,6 @@ fn drainMailbox(self: *Thread) !void {
 
             .presentation_health => |v| self.renderer.setPresentationHealth(v),
 
-            .resize => |v| self.renderer.setScreenSize(v),
-
             .change_config => |config| {
                 defer config.alloc.destroy(config.thread);
                 defer config.alloc.destroy(config.impl);
@@ -432,6 +464,9 @@ fn drainMailbox(self: *Thread) !void {
             },
         }
     }
+
+    // Apply the latest resize after the messages queued alongside it.
+    if (self.pending_size.take()) |size| self.renderer.setScreenSize(size);
 }
 
 fn changeConfig(self: *Thread, config: *const DerivedConfig) !void {
@@ -846,3 +881,25 @@ const Compression = struct {
         };
     }
 };
+
+test "PendingSize keeps only the latest size" {
+    const testing = std.testing;
+
+    var pending: PendingSize = .{};
+    try testing.expect(pending.take() == null);
+
+    const small: rendererpkg.Size = .{
+        .screen = .{ .width = 800, .height = 600 },
+        .cell = .{ .width = 10, .height = 20 },
+        .padding = .{},
+    };
+    var large = small;
+    large.screen = .{ .width = 1600, .height = 1200 };
+
+    // Sizes that arrive before the render thread takes one replace
+    // each other instead of queueing.
+    pending.set(small);
+    pending.set(large);
+    try testing.expectEqual(large, pending.take().?);
+    try testing.expect(pending.take() == null);
+}

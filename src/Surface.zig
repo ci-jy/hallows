@@ -701,6 +701,7 @@ pub fn init(
             .renderer_state = &self.renderer_state,
             .renderer_wakeup = render_thread.wakeup,
             .renderer_mailbox = render_thread.mailbox,
+            .renderer_size = render_thread.pending_size,
             .surface_mailbox = .{ .surface = self, .app = app_mailbox },
         });
     }
@@ -2571,12 +2572,10 @@ fn resize(self: *Surface, size: rendererpkg.ScreenSize) !void {
     // Mail the IO thread
     self.queueIo(.{ .resize = self.size }, .unlocked);
 
-    // Mail the render thread so it updates its padding and screen size.
-    _ = self.renderer_thread.mailbox.push(
-        global.io(),
-        .{ .resize = self.size },
-        .forever,
-    );
+    // Tell the render thread so it updates its padding and screen size.
+    // This doesn't use the mailbox so it can't block if the render
+    // thread is stuck; see `rendererpkg.Thread.PendingSize`.
+    self.renderer_thread.pending_size.set(self.size);
     self.queueRender() catch |err| {
         log.warn("failed to notify renderer of resize err={}", .{err});
     };
