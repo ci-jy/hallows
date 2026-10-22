@@ -35,6 +35,13 @@
 //! before the connection dropped, so only the screen needs redrawing, not
 //! the scrollback.
 //!
+//! A new session runs in a systemd user scope of its own, so that it
+//! doesn't share the cgroup of the login it was started from and end with
+//! it. Right after the host boots, the user's systemd manager may not be
+//! running yet; `attach` then waits for it (see `waitForUserScope`). The
+//! list of sessions to choose from says which ones are inside a system
+//! service, and so end when it restarts.
+//!
 //! `cwd` prints the working directory of the program in the foreground of
 //! the session TAG is attached to (Linux only). Hallows' file tree uses it
 //! to show the files of a remote terminal.
@@ -142,9 +149,17 @@ const SessionInfo = struct {
     info: Info,
     label_buf: [max_label]u8 = undefined,
     label_len: usize = 0,
+    /// The system service the daemon is inside, if any (see
+    /// `systemService`).
+    service_buf: [64]u8 = undefined,
+    service_len: usize = 0,
 
     fn label(self: *const SessionInfo) []const u8 {
         return self.label_buf[0..self.label_len];
+    }
+
+    fn service(self: *const SessionInfo) []const u8 {
+        return self.service_buf[0..self.service_len];
     }
 };
 
@@ -254,6 +269,13 @@ fn querySession(dir: []const u8, name: []const u8, tag: []const u8) ?SessionInfo
         .label_len = len - @sizeOf(Info),
     };
     @memcpy(result.label_buf[0..result.label_len], buf[@sizeOf(Info)..len]);
+    var cgroup_buf: [1024]u8 = undefined;
+    if (peerPid(fd)) |pid| if (systemService(pid, &cgroup_buf)) |service| {
+        if (service.len <= result.service_buf.len) {
+            @memcpy(result.service_buf[0..service.len], service);
+            result.service_len = service.len;
+        }
+    };
     return result;
 }
 
@@ -323,19 +345,63 @@ fn procCwd(dir: []const u8, name: []const u8, buf: []u8) ?[]const u8 {
 
 extern "c" fn getsockopt(fd: c_int, level: c_int, name: c_int, value: ?*anyopaque, len: *u32) c_int;
 
+/// The pid of the daemon at the other end of FD, a connection to its
+/// socket. Linux only.
+fn peerPid(fd: c.fd_t) ?c.pid_t {
+    if (builtin.os.tag != .linux) return null;
+    const Ucred = extern struct { pid: c.pid_t, uid: u32, gid: u32 };
+    var cred: Ucred = undefined;
+    var len: u32 = @sizeOf(Ucred);
+    const SOL_SOCKET = 1;
+    const SO_PEERCRED = 17;
+    if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0) return null;
+    return if (cred.pid > 0) cred.pid else null;
+}
+
+/// The system service whose cgroup the process PID (0 for this one) is
+/// in, such as "tailscaled.service". It's killed when that service stops
+/// or restarts. Linux only.
+fn systemService(pid: c.pid_t, buf: []u8) ?[]const u8 {
+    if (builtin.os.tag != .linux) return null;
+    var path_buf: [64]u8 = undefined;
+    const path = if (pid == 0)
+        "/proc/self/cgroup"
+    else
+        std.fmt.bufPrintZ(&path_buf, "/proc/{d}/cgroup", .{pid}) catch return null;
+    return serviceFromCgroup(readProcFile(path, buf) orelse return null);
+}
+
+/// The system service in the contents of a /proc/PID/cgroup file, if the
+/// process is in one.
+fn serviceFromCgroup(text: []const u8) ?[]const u8 {
+    var lines = std.mem.tokenizeScalar(u8, text, '\n');
+    while (lines.next()) |line| {
+        // "hierarchy:controllers:path". systemd's hierarchy is the unified
+        // one ("0::"), or "name=systemd" on hosts without it.
+        var fields = std.mem.splitScalar(u8, line, ':');
+        const id = fields.next() orelse continue;
+        const controllers = fields.next() orelse continue;
+        const unified = std.mem.eql(u8, id, "0") and controllers.len == 0;
+        if (!unified and !std.mem.eql(u8, controllers, "name=systemd")) continue;
+
+        const prefix = "/system.slice/";
+        const path = fields.rest();
+        if (!std.mem.startsWith(u8, path, prefix)) return null;
+        var units = std.mem.tokenizeScalar(u8, path[prefix.len..], '/');
+        while (units.next()) |unit| {
+            if (std.mem.endsWith(u8, unit, ".service")) return unit;
+        }
+        return null;
+    }
+    return null;
+}
+
 fn linuxProcCwd(dir: []const u8, name: []const u8, buf: []u8) ?[]const u8 {
     const daemon: c.pid_t = daemon: {
         const fd = (connectSession(dir, name) catch return null) orelse return null;
         defer _ = c.close(fd);
-        const Ucred = extern struct { pid: c.pid_t, uid: u32, gid: u32 };
-        var cred: Ucred = undefined;
-        var len: u32 = @sizeOf(Ucred);
-        const SOL_SOCKET = 1;
-        const SO_PEERCRED = 17;
-        if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cred, &len) != 0) return null;
-        break :daemon cred.pid;
+        break :daemon peerPid(fd) orelse return null;
     };
-    if (daemon <= 0) return null;
 
     var path_buf: [64]u8 = undefined;
     var file_buf: [1024]u8 = undefined;
@@ -428,10 +494,7 @@ fn chooseSession(alloc: Allocator, others: []const Other) ?usize {
     defer out.deinit();
     const w = &out.writer;
     var host_buf: [256]u8 = undefined;
-    const host = if (c.gethostname(&host_buf, host_buf.len) == 0)
-        std.mem.sliceTo(&host_buf, 0)
-    else
-        "this host";
+    const host = hostName(&host_buf);
     w.writeAll("Sessions running on ") catch return null;
     writePrintable(w, host);
     w.writeAll(":\n\n") catch return null;
@@ -446,6 +509,11 @@ fn chooseSession(alloc: Allocator, others: []const Other) ?usize {
         }) catch return null;
         writePrintable(w, entry.session.label());
         w.writeAll("\n") catch return null;
+        if (entry.session.service().len > 0) {
+            w.writeAll("      ends if ") catch return null;
+            writePrintable(w, entry.session.service());
+            w.writeAll(" restarts\n") catch return null;
+        }
         any_attached = any_attached or info.clients > 0;
     }
     if (any_attached) w.writeAll(
@@ -476,6 +544,12 @@ fn sessionState(buf: []u8, info: Info, timestamp: i64) []const u8 {
         std.fmt.bufPrint(buf, "detached {s}", .{formatAgo(&ago_buf, timestamp - info.detached_at)}) catch ""
     else
         std.fmt.bufPrint(buf, "attached, active {s}", .{formatAgo(&ago_buf, timestamp - info.active_at)}) catch "";
+}
+
+/// This host's name, for messages.
+fn hostName(buf: *[256]u8) []const u8 {
+    if (c.gethostname(buf, buf.len) != 0) return "this host";
+    return std.mem.sliceTo(buf, 0);
 }
 
 /// "just now", "5m ago", "3h ago", "2d ago".
@@ -522,7 +596,10 @@ fn attach(
     }
     var name_buf: [8]u8 = undefined;
     const name = sessionName(&name_buf, pick.n);
-    if (pick.new) try startDaemon(alloc, env, self_path, name, size);
+    if (pick.new) {
+        const scoped = waitForUserScope(alloc, env);
+        try startDaemon(alloc, self_path, name, size, scoped);
+    }
 
     // A new daemon takes a moment to listen.
     const fd = fd: for (0..100) |_| {
@@ -560,23 +637,21 @@ fn attach(
     return proxy(alloc, fd);
 }
 
-/// Start a daemon for session NAME, detached from this process and, where
-/// systemd is available, in a user scope of its own: otherwise it would
-/// share the ssh session's cgroup and could be killed along with it, e.g.
-/// when sshd or tailscaled restarts.
+/// Start a daemon for session NAME, detached from this process and, if
+/// `scoped`, in a user scope of its own: otherwise it would share the ssh
+/// session's cgroup and could be killed along with it, e.g. when sshd or
+/// tailscaled restarts.
 fn startDaemon(
     alloc: Allocator,
-    env: *const std.process.Environ.Map,
     self_path: []const u8,
     name: []const u8,
     size: Winsize,
+    scoped: bool,
 ) !void {
     const self_z = try alloc.dupeZ(u8, self_path);
     const name_z = try alloc.dupeZ(u8, name);
     const rows_z = try std.fmt.allocPrintSentinel(alloc, "{d}", .{size.rows}, 0);
     const cols_z = try std.fmt.allocPrintSentinel(alloc, "{d}", .{size.cols}, 0);
-    const runtime_dir = try std.fmt.allocPrintSentinel(alloc, "/run/user/{d}", .{c.getuid()}, 0);
-    const has_runtime_dir = env.get("XDG_RUNTIME_DIR") != null;
 
     const pid = c.fork();
     if (pid < 0) return error.ForkFailed;
@@ -592,12 +667,7 @@ fn startDaemon(
             _ = c.dup2(null_fd, 2);
         }
 
-        // systemd-run --user needs this to find the user's manager.
-        if (!has_runtime_dir and c.access(runtime_dir, 0) == 0)
-            _ = setenv("XDG_RUNTIME_DIR", runtime_dir, 1);
-
-        const scope_check = [_:null]?[*:0]const u8{ "systemd-run", "--user", "--scope", "--quiet", "true" };
-        if (runWait(&scope_check) == 0) {
+        if (scoped) {
             const argv = [_:null]?[*:0]const u8{
                 "systemd-run", "--user", "--scope", "--quiet", "--collect",
                 self_z,        "serve",  name_z,    rows_z,    cols_z,
@@ -613,11 +683,131 @@ fn startDaemon(
     _ = c.waitpid(pid, &status, 0);
 }
 
-/// Run a command to completion and return its exit status, or -1.
+/// How long `waitForUserScope` keeps trying after the host lets users in
+/// (their managers start right then), and how long it waits at most.
+const user_scope_grace_ms = 10 * std.time.ms_per_s;
+const user_scope_max_wait_ms = 5 * std.time.ms_per_min;
+
+/// Wait, if need be, until a daemon started now can have a user scope of
+/// its own (see `startDaemon`). Returns whether it can.
+///
+/// That takes the user's systemd manager, which systemd starts only once
+/// it lets users log in, minutes into a slow boot. Tailscale SSH doesn't
+/// wait for that, so a terminal reconnecting as soon as the host is back
+/// can get in first. A daemon started then would stay in the login's
+/// cgroup, for Tailscale SSH tailscaled.service's, and be killed when that
+/// service next restarts (say, by an upgrade). Processes can't be moved
+/// out of a system service later, so while the host is starting up, wait
+/// for the manager, unless the user would rather not.
+fn waitForUserScope(alloc: Allocator, env: *const std.process.Environ.Map) bool {
+    useRuntimeDir(env);
+    if (userScopeAvailable()) return true;
+
+    if (!hostStarting()) return false;
+
+    const stdin = posix.STDIN_FILENO;
+    const stdout = posix.STDOUT_FILENO;
+    const tty = c.isatty(stdin) != 0;
+    var cgroup_buf: [1024]u8 = undefined;
+    const service = systemService(0, &cgroup_buf);
+
+    var available = false;
+    wait: {
+        if (tty) {
+            var out: std.Io.Writer.Allocating = .init(alloc);
+            defer out.deinit();
+            const w = &out.writer;
+            var host_buf: [256]u8 = undefined;
+            writePrintable(w, hostName(&host_buf));
+            w.writeAll(" is still starting up. Waiting for it, so that this session\n") catch {};
+            if (service) |s| {
+                w.writeAll("doesn't end when ") catch {};
+                writePrintable(w, s);
+                w.writeAll(" restarts.") catch {};
+            } else w.writeAll("can keep running on its own.") catch {};
+            w.writeAll(" Press Enter to start it now.\n") catch {};
+            writeAll(stdout, out.written()) catch {};
+        }
+
+        const start = monotonicMs();
+        var starting_at = start;
+        while (true) {
+            const t = monotonicMs();
+            if (hostStarting()) {
+                starting_at = t;
+            } else if (t - starting_at >= user_scope_grace_ms) break :wait;
+            if (t - start >= user_scope_max_wait_ms) break :wait;
+
+            if (tty) {
+                var line_buf: [48]u8 = undefined;
+                writeAll(stdout, std.fmt.bufPrint(
+                    &line_buf,
+                    "\rWaiting... {d}s\x1b[K",
+                    .{@divTrunc(t - start, std.time.ms_per_s)},
+                ) catch "") catch {};
+            }
+            if (waitForEnter(stdin, tty, 500)) break :wait;
+
+            useRuntimeDir(env);
+            if (userScopeAvailable()) {
+                available = true;
+                break :wait;
+            }
+        }
+    }
+
+    if (tty) writeAll(stdout, "\r\x1b[K") catch {};
+    return available;
+}
+
+/// Whether systemd is still keeping users out while the host starts up.
+fn hostStarting() bool {
+    return c.access("/run/systemd/system", 0) == 0 and c.access("/run/nologin", 0) == 0;
+}
+
+/// Whether systemd is running a manager for this user, so a daemon can
+/// have a user scope of its own.
+fn userScopeAvailable() bool {
+    const argv = [_:null]?[*:0]const u8{ "systemd-run", "--user", "--scope", "--quiet", "true" };
+    return runWait(&argv) == 0;
+}
+
+/// systemd-run --user needs XDG_RUNTIME_DIR to find the user's manager,
+/// and logins over Tailscale SSH don't set it. The directory exists once
+/// systemd lets the user in.
+fn useRuntimeDir(env: *const std.process.Environ.Map) void {
+    if (env.get("XDG_RUNTIME_DIR") != null) return;
+    var buf: [32]u8 = undefined;
+    const dir = std.fmt.bufPrintZ(&buf, "/run/user/{d}", .{c.getuid()}) catch return;
+    if (c.access(dir, 0) == 0) _ = setenv("XDG_RUNTIME_DIR", dir, 1);
+}
+
+/// Wait up to MS for the user to press Enter on STDIN, a terminal in
+/// canonical mode if `tty`. Returns whether they did.
+fn waitForEnter(stdin: c.fd_t, tty: bool, ms: u32) bool {
+    if (!tty) {
+        sleepMs(ms);
+        return false;
+    }
+    var pfd = [_]c.pollfd{.{ .fd = stdin, .events = c.POLL.IN, .revents = 0 }};
+    if (c.poll(&pfd, 1, @intCast(ms)) <= 0) return false;
+    var buf: [256]u8 = undefined;
+    _ = c.read(stdin, &buf, buf.len);
+    return true;
+}
+
+/// Run a command to completion, with its output discarded, and return its
+/// exit status, or -1.
 fn runWait(argv: [*:null]const ?[*:0]const u8) c_int {
     const pid = c.fork();
     if (pid < 0) return -1;
     if (pid == 0) {
+        const null_fd = c.open("/dev/null", .{ .ACCMODE = .RDWR });
+        if (null_fd >= 0) {
+            _ = c.dup2(null_fd, 0);
+            _ = c.dup2(null_fd, 1);
+            _ = c.dup2(null_fd, 2);
+        }
         _ = execvp(argv[0].?, argv);
         c._exit(127);
     }
@@ -939,6 +1129,20 @@ fn serve(
     };
     daemon.stream = daemon.term.vtStream();
     _ = &term;
+
+    // A session inside a system service ends with it (see
+    // `waitForUserScope`). Say so at the top of the session, where it stays
+    // in the scrollback: anything `attach` printed is gone once it shows the
+    // session.
+    var cgroup_buf: [1024]u8 = undefined;
+    if (systemService(0, &cgroup_buf)) |service| {
+        var note_buf: [128]u8 = undefined;
+        daemon.stream.nextSlice(std.fmt.bufPrint(
+            &note_buf,
+            "This session will end if {s} restarts.\r\n",
+            .{service},
+        ) catch "");
+    }
 
     const status = run(&daemon, listener);
 
@@ -1298,6 +1502,12 @@ fn now() i64 {
     return ts.sec;
 }
 
+fn monotonicMs() i64 {
+    var ts: c.timespec = undefined;
+    _ = c.clock_gettime(.MONOTONIC, &ts);
+    return @as(i64, ts.sec) * std.time.ms_per_s + @as(i64, @divTrunc(ts.nsec, std.time.ns_per_ms));
+}
+
 fn sleepMs(ms: u32) void {
     var ts: c.timespec = .{ .sec = 0, .nsec = @as(isize, ms) * std.time.ns_per_ms };
     _ = c.nanosleep(&ts, &ts);
@@ -1341,6 +1551,28 @@ test "sessionState" {
     try testing.expectEqualStrings("detached 5m ago", sessionState(&buf, detached, 1000 + 5 * 60));
     const attached: Info = .{ .clients = 1, .detached_at = 0, .knows_tag = 0, .active_at = 1000 };
     try testing.expectEqualStrings("attached, active just now", sessionState(&buf, attached, 1010));
+}
+
+test "serviceFromCgroup" {
+    const testing = std.testing;
+    try testing.expectEqualStrings(
+        "tailscaled.service",
+        serviceFromCgroup("0::/system.slice/tailscaled.service\n").?,
+    );
+    try testing.expectEqualStrings(
+        "getty@tty1.service",
+        serviceFromCgroup("0::/system.slice/system-getty.slice/getty@tty1.service\n").?,
+    );
+    try testing.expectEqualStrings(
+        "ssh.service",
+        serviceFromCgroup("12:pids:/system.slice/ssh.service\n1:name=systemd:/system.slice/ssh.service\n").?,
+    );
+    try testing.expect(serviceFromCgroup(
+        "0::/user.slice/user-1000.slice/user@1000.service/app.slice/run-p1-i2.scope\n",
+    ) == null);
+    try testing.expect(serviceFromCgroup("0::/user.slice/user-1000.slice/session-c1.scope\n") == null);
+    try testing.expect(serviceFromCgroup("0::/init.scope\n") == null);
+    try testing.expect(serviceFromCgroup("") == null);
 }
 
 test "writePrintable" {

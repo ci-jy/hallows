@@ -163,7 +163,9 @@ pub const Options = struct {
 ///
 ///   * The login shell runs in a session that `hallows-persist` keeps
 ///     alive on the remote host, started in a systemd user scope when
-///     available so it outlives the ssh session's cgroup. Unlike tmux, it
+///     available so it outlives the ssh session's cgroup. Right after the
+///     host boots, before systemd lets users in, a new session waits for
+///     that (Enter skips the wait). Unlike tmux, it
 ///     isn't a terminal of its own: programs talk to Hallows directly, so
 ///     everything Hallows supports keeps working, and scrollback stays in
 ///     Hallows.
