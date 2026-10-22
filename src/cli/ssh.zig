@@ -21,6 +21,8 @@ const usage =
     \\  --cache[=bool]        Use the terminfo install cache. Default: true.
     \\  --persist[=bool]      Keep interactive logins alive across dropped
     \\                        connections and reconnect. Default: false.
+    \\  --resume=<tag>        With --persist, reattach the session an earlier
+    \\                        +ssh with this tag was attached to.
     \\  --ssh=<path>          Path to the ssh binary. Default: first `ssh` on PATH.
     \\  --verbose             Print +ssh status lines to stderr.
     \\  --help                Show full help.
@@ -44,6 +46,10 @@ pub const Options = struct {
 
     /// Maps to the `ssh-persist` shell integration feature.
     persist: bool = false,
+
+    /// The tag of an earlier `--persist` run whose session to reattach.
+    /// Hallows passes it when it restores a terminal after a restart.
+    @"resume": []const u8 = "",
 
     /// The wrapped `ssh` binary.
     /// `/`-containing values are treated as paths; otherwise resolved via PATH.
@@ -166,9 +172,14 @@ pub const Options = struct {
 ///     session and redraws the screen, including anything printed while
 ///     disconnected. Reconnect progress is shown in the window title only.
 ///
-///   * A new `ssh` to the same host picks up the most recently detached
-///     session, with its scrollback, or starts a new one. Exiting the
-///     shell ends the session.
+///   * When Hallows restarts, even after a crash or force quit, each
+///     restored terminal reattaches the session it showed, with its
+///     scrollback (see `--resume`).
+///
+///   * A new `ssh` to a host with sessions already running lists them so
+///     you can choose one to attach, with its scrollback, or press Enter
+///     for a new one. Without running sessions, it starts a new one.
+///     Exiting the shell ends the session.
 ///
 /// Flags:
 ///
@@ -181,6 +192,12 @@ pub const Options = struct {
 ///   * `--persist=<bool>`: Keep interactive logins alive across dropped
 ///     connections and reconnect automatically (see above).
 ///     Default: `false`.
+///
+///   * `--resume=<tag>`: With `--persist`, reattach the session that an
+///     earlier `+ssh --persist` was attached to, instead of choosing one.
+///     The tag identifies that earlier run; Hallows saves it with each
+///     terminal and passes it when it restores the terminal. If that
+///     session has ended, `+ssh` carries on as if this weren't given.
 ///
 ///   * `--cache=<bool>`: Use the terminfo install cache. Default: `true`.
 ///     When `false`, both the cache read (skip-if-installed) and the
@@ -264,6 +281,10 @@ fn runInner(
 
     if (opts._ssh_args.items.len == 0) {
         try stderr.print("Error: no ssh arguments provided.\n\n{s}", .{usage});
+        return 2;
+    }
+    if (opts.@"resume".len > 0 and !validTag(opts.@"resume")) {
+        try stderr.print("Error: invalid --resume tag.\n\n{s}", .{usage});
         return 2;
     }
 
@@ -849,10 +870,12 @@ fn runPersistent(
 ) !u8 {
     const io = global.io();
 
-    // Identifies this terminal to the remote across reconnects.
+    // Identifies this terminal to the remote across reconnects, and across
+    // restarts of Hallows, which passes it back as --resume.
     var tag_bytes: [12]u8 = undefined;
     io.random(&tag_bytes);
-    const tag = std.fmt.bytesToHex(tag_bytes, .lower);
+    const random_tag = std.fmt.bytesToHex(tag_bytes, .lower);
+    const tag: []const u8 = if (opts.@"resume".len > 0) opts.@"resume" else &random_tag;
 
     // ssh runs LocalCommand only once the connection is up, so this marker
     // tells a dropped session apart from one that never connected (unknown
@@ -871,12 +894,12 @@ fn runPersistent(
     const remote_command = try std.fmt.allocPrint(
         alloc,
         "sh -c 'exec \"$HOME/{s}\" attach {s}'",
-        .{ persist_remote_path, &tag },
+        .{ persist_remote_path, tag },
     );
     const reconnect_command = try std.fmt.allocPrint(
         alloc,
         "sh -c 'exec \"$HOME/{s}\" attach {s} --reconnect'",
-        .{ persist_remote_path, &tag },
+        .{ persist_remote_path, tag },
     );
 
     // The keepalives notice a dead connection within seconds (e.g. after
@@ -1007,6 +1030,14 @@ fn isSshNoise(line: []const u8, reconnecting: bool) bool {
         if (std.mem.startsWith(u8, l, prefix)) return true;
     }
     return false;
+}
+
+/// Whether `tag` can be a `--resume` tag: what `hallows-persist attach`
+/// accepts, and safe to put in the remote command unquoted.
+fn validTag(tag: []const u8) bool {
+    if (tag.len == 0 or tag.len > 64) return false;
+    for (tag) |ch| if (!std.ascii.isAlphanumeric(ch) and ch != '-' and ch != '_') return false;
+    return true;
 }
 
 /// Whether ssh `args` (everything after `ssh`) ask for an interactive login:
@@ -1268,6 +1299,26 @@ test "isInteractiveLogin" {
         &.{ "host", "--", "ls" },
     };
     for (no) |args| try testing.expect(!isInteractiveLogin(args));
+}
+
+test "validTag" {
+    const testing = std.testing;
+    try testing.expect(validTag("0a1b2c3d4e5f6a7b8c9d0e1f"));
+    try testing.expect(validTag("a_b-c"));
+    try testing.expect(!validTag(""));
+    try testing.expect(!validTag("a'b"));
+    try testing.expect(!validTag("a b"));
+    try testing.expect(!validTag("x" ** 65));
+}
+
+test "parseManuallyHook: --resume" {
+    const testing = std.testing;
+    var opts: Options = .{};
+    defer opts.deinit();
+    try parseTestArgs(testing.allocator, &opts, "--persist --resume=0a1b2c -- host");
+    try testing.expect(opts.persist);
+    try testing.expectEqualStrings("0a1b2c", opts.@"resume");
+    try testing.expectEqual(@as(usize, 1), opts._ssh_args.items.len);
 }
 
 test "configAllowsPersist" {

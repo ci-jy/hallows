@@ -2415,8 +2415,10 @@ keybind: Keybinds = .{},
 ///     or the remote `sshd`/`tailscaled` restarts. `ssh host` (with no remote
 ///     command) keeps its shell alive on the remote host and reconnects to
 ///     it on its own, like tmux but without a terminal in between, so
-///     everything Hallows supports keeps working. A new `ssh` to the host
-///     picks up the most recently detached session. A small program,
+///     everything Hallows supports keeps working. Terminals that Hallows
+///     restores after a restart, even a crash, reattach their sessions. A
+///     new `ssh` to a host with sessions running lets you choose one to
+///     attach or start a new one. A small program,
 ///     `hallows-persist`, is copied to `~/.local/share/hallows/` on the
 ///     remote host on first connect; it's available for Linux on x86_64
 ///     and aarch64, and other hosts connect normally. See

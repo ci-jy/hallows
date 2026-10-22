@@ -19,6 +19,18 @@ extension Ghostty {
             }
         }
 
+        /// The `hallows +ssh --persist` session running in this surface, if
+        /// any, saved with it so a restored surface reattaches it.
+        private(set) var persistSession: PersistSession? {
+            didSet {
+                guard persistSession != oldValue else { return }
+                window?.invalidateRestorableState()
+            }
+        }
+
+        /// The foreground process group `persistSession` was found in.
+        private var persistSessionGroup: Int?
+
         // The progress report (if any)
         override var progressReport: Action.ProgressReport? {
             didSet {
@@ -631,6 +643,10 @@ extension Ghostty {
                 withTimeInterval: 0.075,
                 repeats: false
             ) { [weak self] _ in
+                // Starting or leaving ssh retitles the terminal, which is
+                // our cue to look for a persistent session again.
+                self?.updatePersistSession()
+
                 // Set the title if it wasn't manually set.
                 guard self?.titleFromTerminal == nil else {
                     self?.titleFromTerminal = title
@@ -638,6 +654,18 @@ extension Ghostty {
                 }
                 self?.title = title
             }
+        }
+
+        private func updatePersistSession() {
+            let pgid = surfaceModel?.foregroundPID
+
+            // While the same `+ssh` is in the foreground, it's attached to the
+            // same session, even while it reconnects with no ssh running.
+            if persistSession != nil, pgid == persistSessionGroup { return }
+
+            let session = pgid.flatMap { PersistSession.find(foregroundProcessGroup: $0) }
+            persistSessionGroup = session == nil ? nil : pgid
+            persistSession = session
         }
 
         // MARK: Local Events
@@ -1864,6 +1892,7 @@ extension Ghostty {
             case uuid
             case title
             case isUserSetTitle
+            case persistSession
         }
 
         required convenience init(from decoder: Decoder) throws {
@@ -1881,7 +1910,16 @@ extension Ghostty {
             let savedTitle = try container.decodeIfPresent(String.self, forKey: .title)
             let isUserSetTitle = try container.decodeIfPresent(Bool.self, forKey: .isUserSetTitle) ?? false
 
+            // Reattach the persistent session this surface showed, by typing
+            // the command into the shell so it's back at its prompt when the
+            // session ends, as it was.
+            let persistSession = try? container.decodeIfPresent(PersistSession.self, forKey: .persistSession)
+            if let persistSession, let hallows = PersistSession.hallowsExecutable {
+                config.initialInput = persistSession.resumeCommand(hallows: hallows) + "\n"
+            }
+
             self.init(app, baseConfig: config, uuid: uuid)
+            self.persistSession = persistSession
 
             // Restore the saved title after initialization
             if let title = savedTitle {
@@ -1899,6 +1937,7 @@ extension Ghostty {
             try container.encode(id.uuidString, forKey: .uuid)
             try container.encode(title, forKey: .title)
             try container.encode(titleFromTerminal != nil, forKey: .isUserSetTitle)
+            try container.encodeIfPresent(persistSession, forKey: .persistSession)
         }
     }
 }

@@ -132,7 +132,7 @@ struct SSHTarget: Hashable {
     }
 }
 
-private enum ProcessTable {
+enum ProcessTable {
     /// The processes in the process group.
     static func pids(inGroup pgid: pid_t) -> [pid_t] {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PGRP, pgid]

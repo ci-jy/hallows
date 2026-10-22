@@ -22,15 +22,18 @@
 //!   hallows-persist serve NAME ROWS COLS
 //!
 //! `attach` connects the terminal identified by TAG to a session. TAG is
-//! random per `+ssh` invocation and stays the same across its reconnects.
-//! A daemon that has had TAG attached before is chosen first, so a
-//! reconnect lands on the same session. Otherwise the most recently
-//! detached session is reattached, and otherwise a new session is started.
-//! If every session is attached somewhere, possibly by a terminal that's
-//! gone without the host noticing yet (such as a computer that lost
-//! power), the user can choose one to take over instead. `--reconnect`
-//! says the terminal still shows the session from before the connection
-//! dropped, so only the screen needs redrawing, not the scrollback.
+//! random per `+ssh` invocation and stays the same across its reconnects;
+//! Hallows also saves it with the terminal and passes it again after a
+//! restart. A daemon that has had TAG attached before is chosen, so a
+//! reconnect lands on the same session. Otherwise, if no session is
+//! running, a new one is started. If some are, a session is never picked
+//! for the user, since which one belongs to this terminal can't be told:
+//! they're listed, and the user chooses one to attach (taking it over if
+//! it's attached somewhere, possibly by a terminal that's gone without the
+//! host noticing yet, such as a computer that lost power) or starts a new
+//! one. `--reconnect` says the terminal still shows the session from
+//! before the connection dropped, so only the screen needs redrawing, not
+//! the scrollback.
 //!
 //! `cwd` prints the working directory of the program in the foreground of
 //! the session TAG is attached to (Linux only). Hallows' file tree uses it
@@ -386,19 +389,17 @@ const Pick = struct {
     new: bool = false,
 };
 
-/// A session that's attached somewhere else.
-const Busy = struct { n: usize, session: SessionInfo };
+/// A running session that TAG hasn't been attached to.
+const Other = struct { n: usize, session: SessionInfo };
 
 /// Pick the session for TAG; see the file comment. When that's a new
-/// session, `busy` gets every running session, all attached elsewhere.
+/// session, `others` gets every running session, for `chooseSession`.
 fn pickSession(
     alloc: Allocator,
     dir: []const u8,
     tag: []const u8,
-    busy: *std.ArrayList(Busy),
+    others: *std.ArrayList(Other),
 ) Pick {
-    var best: ?usize = null;
-    var best_detached_at: i64 = std.math.minInt(i64);
     var free: ?usize = null;
     var buf: [8]u8 = undefined;
     for (1..max_sessions + 1) |n| {
@@ -406,23 +407,19 @@ fn pickSession(
             if (free == null) free = n;
             continue;
         };
-        const info = session.info;
-        if (info.knows_tag != 0) return .{ .n = n, .known = true };
-        if (info.clients == 0 and info.detached_at > best_detached_at) {
-            best = n;
-            best_detached_at = info.detached_at;
-        }
-        if (info.clients > 0) busy.append(alloc, .{ .n = n, .session = session }) catch {};
+        if (session.info.knows_tag != 0) return .{ .n = n, .known = true };
+        others.append(alloc, .{ .n = n, .session = session }) catch {};
     }
-    if (best) |n| return .{ .n = n };
     return .{ .n = free orelse max_sessions + 1, .new = true };
 }
 
-/// Every session is attached somewhere. Some may be attached by terminals
-/// that are gone, such as a computer that lost power, which the host only
-/// notices once the connection times out. Let the user take one of them
-/// over. Returns its number, or null for a new session.
-fn chooseSession(alloc: Allocator, busy: []const Busy) ?usize {
+/// Sessions are running, but none of them has been attached to this
+/// terminal, so which one the user wants can't be told. It may be none:
+/// one may be left from a terminal that was closed, or from a computer that
+/// lost power, which the host only notices once the connection times out.
+/// Let the user choose. Returns the session's number, or null for a new
+/// session.
+fn chooseSession(alloc: Allocator, others: []const Other) ?usize {
     const stdin = posix.STDIN_FILENO;
     const stdout = posix.STDOUT_FILENO;
     if (c.isatty(stdin) == 0) return null;
@@ -430,24 +427,33 @@ fn chooseSession(alloc: Allocator, busy: []const Busy) ?usize {
     var out: std.Io.Writer.Allocating = .init(alloc);
     defer out.deinit();
     const w = &out.writer;
-    w.writeAll(
-        \\Every session here is open in another terminal. If one of them is
-        \\from a terminal that's gone, such as a computer that lost power, you
-        \\can take it over.
-        \\
-        \\
-    ) catch return null;
+    var host_buf: [256]u8 = undefined;
+    const host = if (c.gethostname(&host_buf, host_buf.len) == 0)
+        std.mem.sliceTo(&host_buf, 0)
+    else
+        "this host";
+    w.writeAll("Sessions running on ") catch return null;
+    writePrintable(w, host);
+    w.writeAll(":\n\n") catch return null;
     const timestamp = now();
-    for (busy) |entry| {
-        var ago_buf: [32]u8 = undefined;
-        w.print("  {d: >2}  active {s: <13} ", .{
+    var any_attached = false;
+    for (others) |entry| {
+        const info = entry.session.info;
+        var state_buf: [48]u8 = undefined;
+        w.print("  {d: >2}  {s: <24} ", .{
             entry.n,
-            formatAgo(&ago_buf, timestamp - entry.session.info.active_at),
+            sessionState(&state_buf, info, timestamp),
         }) catch return null;
         writePrintable(w, entry.session.label());
         w.writeAll("\n") catch return null;
+        any_attached = any_attached or info.clients > 0;
     }
-    w.writeAll("\nSession to take over (Enter for a new one): ") catch return null;
+    if (any_attached) w.writeAll(
+        \\
+        \\Choosing an attached one moves it to this terminal.
+        \\
+    ) catch return null;
+    w.writeAll("\nSession to attach (Enter for a new one): ") catch return null;
     writeAll(stdout, out.written()) catch return null;
 
     var buf: [64]u8 = undefined;
@@ -457,9 +463,19 @@ fn chooseSession(alloc: Allocator, busy: []const Busy) ?usize {
         const answer = std.mem.trim(u8, buf[0..@intCast(n)], " \t\r\n");
         if (answer.len == 0) return null;
         const choice = std.fmt.parseInt(usize, answer, 10) catch 0;
-        for (busy) |entry| if (entry.n == choice) return choice;
+        for (others) |entry| if (entry.n == choice) return choice;
         writeAll(stdout, "Type one of the numbers above, or press Enter: ") catch return null;
     }
+}
+
+/// How a session is doing, for `chooseSession`: "detached 5m ago" or
+/// "attached, active 5m ago".
+fn sessionState(buf: []u8, info: Info, timestamp: i64) []const u8 {
+    var ago_buf: [32]u8 = undefined;
+    return if (info.clients == 0)
+        std.fmt.bufPrint(buf, "detached {s}", .{formatAgo(&ago_buf, timestamp - info.detached_at)}) catch ""
+    else
+        std.fmt.bufPrint(buf, "attached, active {s}", .{formatAgo(&ago_buf, timestamp - info.active_at)}) catch "";
 }
 
 /// "just now", "5m ago", "3h ago", "2d ago".
@@ -490,12 +506,12 @@ fn attach(
     makeDirs(dir);
 
     const size = terminalSize(posix.STDIN_FILENO);
-    var busy: std.ArrayList(Busy) = .empty;
-    defer busy.deinit(alloc);
-    var pick = pickSession(alloc, dir, tag, &busy);
+    var others: std.ArrayList(Other) = .empty;
+    defer others.deinit(alloc);
+    var pick = pickSession(alloc, dir, tag, &others);
     var take_over = false;
-    if (pick.new and busy.items.len > 0) {
-        if (chooseSession(alloc, busy.items)) |n| {
+    if (pick.new and others.items.len > 0) {
+        if (chooseSession(alloc, others.items)) |n| {
             pick = .{ .n = n };
             take_over = true;
         }
@@ -1316,6 +1332,15 @@ test "formatAgo" {
     try testing.expectEqualStrings("5m ago", formatAgo(&buf, 5 * 60 + 10));
     try testing.expectEqualStrings("3h ago", formatAgo(&buf, 3 * 3600 + 59));
     try testing.expectEqualStrings("2d ago", formatAgo(&buf, 2 * 86400));
+}
+
+test "sessionState" {
+    const testing = std.testing;
+    var buf: [48]u8 = undefined;
+    const detached: Info = .{ .clients = 0, .detached_at = 1000, .knows_tag = 0, .active_at = 0 };
+    try testing.expectEqualStrings("detached 5m ago", sessionState(&buf, detached, 1000 + 5 * 60));
+    const attached: Info = .{ .clients = 1, .detached_at = 0, .knows_tag = 0, .active_at = 1000 };
+    try testing.expectEqualStrings("attached, active just now", sessionState(&buf, attached, 1010));
 }
 
 test "writePrintable" {
