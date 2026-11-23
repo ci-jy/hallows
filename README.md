@@ -1,5 +1,7 @@
 # Hallows
 
+![Hallows with the file tree sidebar, an editor, a shell, and a test run reporting its progress in the pane header](images/screenshot.png)
+
 Hallows is a terminal emulator for macOS on Apple Silicon. It's a fork of
 [Ghostty](https://github.com/ghostty-org/ghostty) that keeps Ghostty's fast,
 standards-compliant terminal core and native macOS app, and adds:
